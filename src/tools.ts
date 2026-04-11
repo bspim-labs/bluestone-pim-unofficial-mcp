@@ -9,76 +9,107 @@ export interface Credentials {
   mapiClientSecret: string;
 }
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types: PAPI ──────────────────────────────────────────────────────────────
 
-interface CategoryAttribute {
-  id: string;
-  name: string;
-  dataType: string;
-  groupName: string;
-  groupNumber?: string;
-  number: string;
-}
-
-interface Category {
+interface PapiCategory {
   id: string;
   order: number;
   name: string;
   number: string;
   description: string;
-  attributes: CategoryAttribute[];
-  categoryAttributes: CategoryAttribute[];
 }
 
-interface CategoriesResponse {
+interface PapiCategoriesResponse {
   totalCount: number;
-  results: Category[];
+  results: PapiCategory[];
 }
 
-interface ProductAttribute {
-  id: string;
-  name: string;
-  groupName: string;
-  dataType: string;
-  unit?: string;
-  values: string[];
-  dictionary?: { value: string }[];
-  definingAttribute?: boolean;
-}
-
-interface ProductMedia {
-  id: string;
-  downloadUri: string;
-  previewUri: string;
-  name?: string;
-  fileName: string;
-  contentType: string;
-  labels: string[];
-}
-
-interface Product {
+interface PapiProduct {
   id: string;
   type: "GROUP" | "VARIANT" | "SINGLE";
   name: string;
   number: string;
-  lastUpdate: number;
-  createDate: number;
-  attributes: ProductAttribute[];
-  media: ProductMedia[];
-  variants: string[];
-  variantParentId?: string;
-  categories: string[];
 }
 
-interface ProductsResponse {
+interface PapiProductsResponse {
   totalCount: number;
-  results: Product[];
+  results: PapiProduct[];
+}
+
+// ─── Types: MAPI ──────────────────────────────────────────────────────────────
+
+interface MapiCatalog {
+  id: string;
+  name: string;
+  number: string;
+  description: string;
+  readOnly: boolean;
+}
+
+interface MapiCatalogsResponse {
+  data: MapiCatalog[];
+}
+
+interface MapiCatalogNode {
+  id: string;
+  name: string;
+  number: string;
+  description?: string;
+  parentId?: string;
+  children: MapiCatalogNode[];
+}
+
+interface MapiCatalogNodesResponse {
+  data: MapiCatalogNode;
+}
+
+interface MapiNodeProduct {
+  productId: string;
+  productName: string;
+}
+
+interface MapiNodeProductsResponse {
+  data: MapiNodeProduct[];
+}
+
+interface MapiAttribute {
+  definitionId: string;
+  values?: string[];
+  dictionary?: string[];
+  readOnly: boolean;
+}
+
+interface MapiAttributeGroup {
+  groupId: string;
+  attributes: MapiAttribute[];
+}
+
+// Available for get_product tool (future).
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+interface MapiGroupedAttributesResponse {
+  data: MapiAttributeGroup[];
+}
+
+interface MapiContext {
+  id: string;
+  name: string;
+  locale: string;
+  fallback: string;
+  initial: boolean;
+  archived: boolean;
+}
+
+interface MapiContextsResponse {
+  data: MapiContext[];
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const PAPI_BASE = "https://api.test.bluestonepim.com/v1";
-const MAPI_BASE = "https://api.test.bluestonepim.com";
+const API_BASE = "https://api.test.bluestonepim.com";
+const PAPI_BASE = `${API_BASE}/v1`;
+const MAPI_PIM_BASE = `${API_BASE}/pim`;
+const MAPI_SEARCH_BASE = `${API_BASE}/search`;
+const MAPI_GLOBAL_SETTINGS_BASE = `${API_BASE}/global-settings`;
 const MAPI_TOKEN_URL = "https://idp.test.bluestonepim.com/op/token";
 
 const DEFAULT_PRODUCT_LIMIT = 50;
@@ -177,7 +208,7 @@ async function mapiPost<T>(
   creds: Credentials
 ): Promise<{ data: T; resourceId: string | null }> {
   const token = await getBearerToken(creds);
-  const res = await fetch(`${MAPI_BASE}${path}`, {
+  const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: {
       accept: "application/json",
@@ -196,42 +227,25 @@ async function mapiPost<T>(
   return { data, resourceId };
 }
 
-function formatAttributeValue(attr: ProductAttribute): string {
-  if (attr.dictionary && attr.dictionary.length > 0) {
-    return attr.dictionary.map((d) => d.value).join(", ");
-  }
-  if (attr.values && attr.values.length > 0) {
-    const val = attr.values.join(", ");
-    return attr.unit ? `${val} ${attr.unit}` : val;
-  }
-  return "(no value)";
-}
-
-function mapProduct(p: Product) {
-  const attrs = p.attributes
-    .filter((a) => a.values.length > 0 || (a.dictionary && a.dictionary.length > 0))
-    .map((a) => ({
-      group: a.groupName,
-      name: a.name,
-      value: formatAttributeValue(a),
-      ...(a.definingAttribute && { definingAttribute: true }),
-    }));
-  return {
-    name: p.name,
-    number: p.number,
-    type: p.type,
-    id: p.id,
-    lastUpdated: new Date(p.lastUpdate).toISOString(),
-    ...(p.media.length > 0 && {
-      media: p.media.map((m) => ({
-        name: m.name ?? m.labels[0] ?? m.fileName,
-        previewUri: m.previewUri,
-        fileName: m.fileName,
-        type: m.contentType,
-      })),
-    }),
-    attributes: attrs,
+async function mapiGet<T>(
+  url: string,
+  creds: Credentials,
+  options?: { context?: string }
+): Promise<T> {
+  const token = await getBearerToken(creds);
+  const headers: Record<string, string> = {
+    accept: "application/json",
+    authorization: `Bearer ${token}`,
   };
+  if (options?.context) {
+    headers["context"] = options.context;
+  }
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(mapiErrorMessage(res.status, body));
+  }
+  return res.json() as Promise<T>;
 }
 
 // ─── Server factory ───────────────────────────────────────────────────────────
@@ -244,81 +258,289 @@ export function createMcpServer(creds: Credentials): McpServer {
     },
     {
       instructions:
-        "⚠️ Bluestone PIM MCP — Beta / Unofficial Experiment\n\n" +
-        "This is an early, unofficial MCP integration for Bluestone PIM. It is currently very limited.\n\n" +
+        "Bluestone PIM MCP - Beta / Unofficial Experiment\n\n" +
+        "This is an early, unofficial MCP integration for Bluestone PIM. It is currently limited.\n\n" +
         "What it can do right now:\n" +
-        "• List all catalogs in the organisation\n" +
-        "• List all products within a catalog (incl. subcategories), with attributes and media info\n" +
-        "• Create a new product (name only — no attributes or category assignment yet)\n\n" +
+        "- List available language/market contexts (list_contexts)\n" +
+        "- List all catalogs and their full category tree, working state (list_catalogs)\n" +
+        "- List products in a category node, working state (list_products_in_category)\n" +
+        "- List published catalogs only (list_published_catalogs)\n" +
+        "- List published products in a category (list_published_products_in_category)\n" +
+        "- Create a new product by name (create_product)\n\n" +
         "What it cannot do yet:\n" +
-        "• Assign products to categories\n" +
-        "• Set product attributes or media\n" +
-        "• Update or delete products\n" +
-        "• Anything beyond the three operations above\n\n" +
+        "- Fetch full product detail or attributes\n" +
+        "- Set product attributes or media\n" +
+        "- Update or delete products\n" +
+        "- Assign products to categories\n\n" +
+        "Working state vs published: the default read tools return working state data, " +
+        "which includes unpublished changes and is what enrichment teams work with. " +
+        "Use the list_published_* tools when the user specifically asks about live/published data.\n\n" +
+        "Context (language/market): read tools accept an optional context parameter. " +
+        "If the user asks to see data in a specific language, call list_contexts first to find the right context ID, " +
+        "then pass it to subsequent tool calls. The default context is 'en' (English).\n\n" +
         "Always confirm the product name with the user before calling create_product.",
     }
   );
 
-  // Tool 1: list_catalogs
+  // Tool: list_contexts
   server.registerTool(
-    "list_catalogs",
+    "list_contexts",
     {
       description:
-        "List all catalogs in the Bluestone PIM organisation, sorted by display order. " +
-        "Returns each catalog's name and ID. " +
-        "Call this first to get category IDs before using list_products_in_category. " +
-        "Category attribute definitions are included in the result — present them only if the user specifically asks about them.",
+        "List all available language and market contexts in this Bluestone PIM organisation. " +
+        "Call this when the user asks to switch language or work in a different market context. " +
+        "Returns context IDs, names, locales, and which context is the default. " +
+        "Pass the context ID to other tools via their context parameter.",
       inputSchema: {},
     },
     async () => {
-      const data = await papiGet<CategoriesResponse>("/categories", creds);
-      const sorted = [...data.results].sort((a, b) => a.order - b.order);
-      const categories = sorted.map((cat) => ({
-        name: cat.name,
-        id: cat.id,
-        ...(cat.attributes.length > 0 && {
-          attributes: cat.attributes.map((a) => ({
-            name: a.name,
-            dataType: a.dataType,
-            group: a.groupName,
-          })),
-        }),
-      }));
+      const data = await mapiGet<MapiContextsResponse>(
+        `${MAPI_GLOBAL_SETTINGS_BASE}/context`,
+        creds
+      );
+      const contexts = data.data
+        .filter((c) => !c.archived)
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          locale: c.locale,
+          ...(c.fallback && { fallback: c.fallback }),
+          ...(c.initial && { default: true }),
+        }));
+      const defaultCtx = contexts.find((c) => c.default);
       return {
         content: [
           {
             type: "text" as const,
             text:
-              `Found ${data.totalCount} catalog${data.totalCount === 1 ? "" : "s"} in this organisation.\n\n` +
-              JSON.stringify({ totalCount: data.totalCount, categories }, null, 2),
+              `Found ${contexts.length} context${contexts.length === 1 ? "" : "s"}. ` +
+              `Default is "${defaultCtx?.name ?? "en"}" (${defaultCtx?.id ?? "en"}).\n\n` +
+              JSON.stringify(contexts, null, 2),
           },
         ],
       };
     }
   );
 
-  // Tool 2: list_products_in_category
+  // Tool: list_catalogs
+  server.registerTool(
+    "list_catalogs",
+    {
+      description:
+        "List all catalogs in the Bluestone PIM organisation, including their full category node tree. " +
+        "Returns working state data, including unpublished changes. " +
+        "Each catalog includes its nested category tree with node IDs. " +
+        "Use node IDs from the tree to call list_products_in_category. " +
+        "Call this first before browsing products.",
+      inputSchema: {
+        context: z
+          .string()
+          .optional()
+          .describe(
+            "Language/market context ID (e.g. \"en\", \"l3600\"). " +
+            "Call list_contexts to see available values. Defaults to English if omitted."
+          ),
+      },
+    },
+    async ({ context }) => {
+      const catalogsData = await mapiGet<MapiCatalogsResponse>(
+        `${MAPI_PIM_BASE}/catalogs`,
+        creds,
+        { context }
+      );
+
+      // Fetch node tree for each catalog in parallel
+      const trees = await Promise.all(
+        catalogsData.data.map((cat) =>
+          mapiGet<MapiCatalogNodesResponse>(
+            `${MAPI_PIM_BASE}/catalogs/${cat.id}/nodes`,
+            creds,
+            { context }
+          ).then((r) => [cat.id, r.data] as const)
+        )
+      );
+      const treeMap = new Map(trees);
+
+      const catalogs = catalogsData.data.map((cat) => ({
+        id: cat.id,
+        name: cat.name,
+        number: cat.number,
+        ...(cat.description && { description: cat.description }),
+        ...(cat.readOnly && { readOnly: true }),
+        nodes: treeMap.get(cat.id) ?? null,
+      }));
+
+      const count = catalogs.length;
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text:
+              `Found ${count} catalog${count === 1 ? "" : "s"} (working state).\n\n` +
+              JSON.stringify({ totalCount: count, catalogs }, null, 2),
+          },
+        ],
+      };
+    }
+  );
+
+  // Tool: list_products_in_category
   server.registerTool(
     "list_products_in_category",
     {
       description:
-        "List products in a Bluestone PIM catalog (including subcategories). " +
-        "Call list_catalogs first to get valid category IDs.\n\n" +
-        "Product types:\n" +
-        "• GROUP — a parent product with variants. Its variants are nested under it in the response.\n" +
-        "• VARIANT — a child of a GROUP (e.g. a size or colour variant). Always displayed indented beneath its parent GROUP, never as a standalone item.\n" +
-        "• SINGLE — a standalone product with no variants.\n\n" +
-        "When displaying results: show GROUP products first with their VARIANT children listed beneath them. " +
-        "SINGLE products stand alone. Never show VARIANTs at the top level.\n\n" +
-        "Full attribute values are included — surface them when the user asks for details on a specific product. " +
-        "Pass categoryName (the human-readable name from list_catalogs) so it appears in the response summary.",
+        "List products in a Bluestone PIM category node. " +
+        "Returns working state data, including unpublished changes. " +
+        "Call list_catalogs first to get node IDs from the category tree.\n\n" +
+        "Returns a flat list of products with their IDs and names. " +
+        "Full attribute detail is not included here. " +
+        "Pass categoryName (the human-readable name from the list_catalogs tree) so it appears in the response summary.",
       inputSchema: {
-        categoryId: z.string().describe("The category ID to fetch products from"),
+        nodeId: z
+          .string()
+          .describe(
+            "The category node ID to fetch products from. Get this from the nodes tree returned by list_catalogs."
+          ),
         categoryName: z
           .string()
           .optional()
           .describe(
-            "Human-readable catalog name from list_catalogs — included in the response summary for context"
+            "Human-readable category name from list_catalogs — included in the response summary for context."
+          ),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(MAX_PRODUCT_LIMIT)
+          .optional()
+          .describe(
+            `Products per page (default ${DEFAULT_PRODUCT_LIMIT}, max ${MAX_PRODUCT_LIMIT}). ` +
+            "If hasMore is true in the response, call again with page incremented by 1."
+          ),
+        page: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe("Page number to fetch, 1-indexed (default 1)."),
+        context: z
+          .string()
+          .optional()
+          .describe(
+            "Language/market context ID (e.g. \"en\", \"l3600\"). " +
+            "Call list_contexts to see available values. Defaults to English if omitted."
+          ),
+      },
+    },
+    async ({ nodeId, categoryName, limit, page, context }) => {
+      const effectiveLimit = limit ?? DEFAULT_PRODUCT_LIMIT;
+      const effectivePage = page ?? DEFAULT_PAGE;
+
+      // MAPI pagination: page is 0-indexed, pageSize defaults to 1000.
+      // The tool exposes 1-indexed pages to the model; we subtract 1 here.
+      const params = new URLSearchParams({
+        page: String(effectivePage - 1),
+        pageSize: String(effectiveLimit),
+      });
+
+      const data = await mapiGet<MapiNodeProductsResponse>(
+        `${MAPI_PIM_BASE}/catalogs/nodes/${nodeId}/products?${params}`,
+        creds,
+        { context }
+      );
+
+      const products = data.data.map((p) => ({
+        id: p.productId,
+        name: p.productName,
+      }));
+
+      const returned = products.length;
+      // MAPI does not return totalCount for this endpoint.
+      // If the page is full, there may be more results.
+      const hasMore = returned === effectiveLimit;
+      const label = categoryName ?? nodeId;
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text:
+              `Found products in "${label}" (working state). Returned ${returned} on page ${effectivePage}` +
+              (hasMore
+                ? `. Call again with page=${effectivePage + 1} to fetch more.`
+                : ".") +
+              "\n\n" +
+              JSON.stringify(
+                {
+                  category: label,
+                  page: effectivePage,
+                  returned,
+                  hasMore,
+                  products,
+                },
+                null,
+                2
+              ),
+          },
+        ],
+      };
+    }
+  );
+
+  // Tool: list_published_catalogs
+  server.registerTool(
+    "list_published_catalogs",
+    {
+      description:
+        "List published (live) catalogs in the Bluestone PIM organisation. " +
+        "Returns only data that has been synced/published — does not include unpublished changes. " +
+        "Use list_catalogs instead when the user is working on enrichment or wants to see current working state. " +
+        "Returns category IDs for use with list_published_products_in_category.",
+      inputSchema: {},
+    },
+    async () => {
+      const data = await papiGet<PapiCategoriesResponse>("/categories", creds);
+      const sorted = [...data.results].sort((a, b) => a.order - b.order);
+      const catalogs = sorted.map((cat) => ({
+        id: cat.id,
+        name: cat.name,
+        number: cat.number,
+        ...(cat.description && { description: cat.description }),
+      }));
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text:
+              `Found ${data.totalCount} published catalog${data.totalCount === 1 ? "" : "s"}.\n\n` +
+              JSON.stringify({ totalCount: data.totalCount, catalogs }, null, 2),
+          },
+        ],
+      };
+    }
+  );
+
+  // Tool: list_published_products_in_category
+  server.registerTool(
+    "list_published_products_in_category",
+    {
+      description:
+        "List published (live) products in a Bluestone PIM category. " +
+        "Returns only data that has been synced/published — does not include unpublished changes. " +
+        "Use list_products_in_category instead when the user is working on enrichment or wants working state. " +
+        "Call list_published_catalogs first to get valid category IDs.\n\n" +
+        "Product types in the response: GROUP (parent with variants), VARIANT (child of a GROUP), SINGLE (standalone).",
+      inputSchema: {
+        categoryId: z
+          .string()
+          .describe(
+            "The category ID to fetch published products from. Get this from list_published_catalogs."
+          ),
+        categoryName: z
+          .string()
+          .optional()
+          .describe(
+            "Human-readable category name from list_published_catalogs — included in the response summary."
           ),
         limit: z
           .number()
@@ -342,50 +564,19 @@ export function createMcpServer(creds: Credentials): McpServer {
       const effectiveLimit = limit ?? DEFAULT_PRODUCT_LIMIT;
       const effectivePage = page ?? DEFAULT_PAGE;
 
-      // Bluestone PAPI pagination: itemsOnPage and pageNo are doubles, pageNo is 0-indexed.
-      // The tool exposes 1-indexed pages to the model; we subtract 1 here.
-      const data = await papiGet<ProductsResponse>(
+      // PAPI pagination: itemsOnPage and pageNo are doubles, pageNo is 0-indexed.
+      const data = await papiGet<PapiProductsResponse>(
         `/categories/${categoryId}/products?subCategories=true&itemsOnPage=${effectiveLimit}&pageNo=${effectivePage - 1}`,
         creds
       );
 
-      // Separate products by type
-      const groupMap = new Map<string, ReturnType<typeof mapProduct> & { variants: ReturnType<typeof mapProduct>[] }>();
-      const singles: ReturnType<typeof mapProduct>[] = [];
-      const variantsByParent = new Map<string, Product[]>();
+      const products = data.results.map((p) => ({
+        id: p.id,
+        name: p.name,
+        number: p.number,
+        type: p.type,
+      }));
 
-      for (const p of data.results) {
-        if (p.type === "VARIANT" && p.variantParentId) {
-          const list = variantsByParent.get(p.variantParentId) ?? [];
-          list.push(p);
-          variantsByParent.set(p.variantParentId, list);
-        } else if (p.type === "GROUP") {
-          groupMap.set(p.id, { ...mapProduct(p), variants: [] });
-        } else {
-          singles.push(mapProduct(p));
-        }
-      }
-
-      // Attach variants to their parent groups.
-      // Variants whose GROUP is on a different page are included as standalone items
-      // (the type field tells the model how to display them).
-      const orphanVariants: ReturnType<typeof mapProduct>[] = [];
-      for (const [parentId, variants] of variantsByParent) {
-        const group = groupMap.get(parentId);
-        if (group) {
-          group.variants = variants.map(mapProduct);
-        } else {
-          orphanVariants.push(...variants.map(mapProduct));
-        }
-      }
-
-      const products = [
-        ...Array.from(groupMap.values()),
-        ...singles,
-        ...orphanVariants,
-      ];
-
-      const showing = data.results.length;
       const totalPages = Math.ceil(data.totalCount / effectiveLimit);
       const hasMore = effectivePage < totalPages;
       const label = categoryName ?? categoryId;
@@ -395,19 +586,18 @@ export function createMcpServer(creds: Credentials): McpServer {
           {
             type: "text" as const,
             text:
-              `Found ${data.totalCount} product${data.totalCount === 1 ? "" : "s"} in "${label}"` +
+              `Found ${data.totalCount} published product${data.totalCount === 1 ? "" : "s"} in "${label}"` +
               (hasMore
-                ? `, showing page ${effectivePage} of ${totalPages}. ` +
-                  `Call again with page=${effectivePage + 1} to fetch more.`
-                : `.`) +
+                ? `, showing page ${effectivePage} of ${totalPages}. Call again with page=${effectivePage + 1} to fetch more.`
+                : ".") +
               "\n\n" +
               JSON.stringify(
                 {
-                  catalog: label,
+                  category: label,
                   totalCount: data.totalCount,
                   page: effectivePage,
                   totalPages,
-                  returned: showing,
+                  returned: products.length,
                   hasMore,
                   products,
                 },
@@ -420,7 +610,7 @@ export function createMcpServer(creds: Credentials): McpServer {
     }
   );
 
-  // Tool 3: create_product
+  // Tool: create_product
   server.registerTool(
     "create_product",
     {
@@ -431,13 +621,22 @@ export function createMcpServer(creds: Credentials): McpServer {
         "After creating, do NOT offer to add attributes or assign the product to a category — these tools do not exist yet. " +
         "Instead, tell the user the product was created and suggest they open Bluestone PIM to continue enriching it.",
       inputSchema: {
-        name: z.string().min(1).describe("The product name — must be confirmed by the user before calling"),
+        name: z
+          .string()
+          .min(1)
+          .describe("The product name — must be confirmed by the user before calling."),
       },
     },
     async ({ name }) => {
-      const { resourceId } = await mapiPost<Record<string, unknown>>("/pim/products", { name }, creds);
+      const { resourceId } = await mapiPost<Record<string, unknown>>(
+        "/pim/products",
+        { name },
+        creds
+      );
       if (!resourceId) {
-        throw new Error("Product was created but no resource-id was returned in the response headers.");
+        throw new Error(
+          "Product was created but no resource-id was returned in the response headers."
+        );
       }
       return {
         content: [
@@ -452,3 +651,6 @@ export function createMcpServer(creds: Credentials): McpServer {
 
   return server;
 }
+
+// MAPI_SEARCH_BASE is reserved for the search_products tool (see TODO.md).
+export { MAPI_SEARCH_BASE };

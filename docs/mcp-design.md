@@ -4,27 +4,35 @@ This document explains the reasoning behind the design choices in this server. I
 
 ---
 
-## session_init as a separate tool
+## Beta notice via McpServer instructions field
 
-The beta notice could have been prepended to every tool response automatically. Instead it lives in a dedicated `session_init` tool that the model must call first.
+The beta notice and capability summary live in the `instructions` field on `McpServer`, not in a tool call or tool response.
 
-**Why:** Prepending a notice to data tool responses breaks separation of concerns — the tool is returning data and a user notice in the same call. An earlier implementation used an `isFirstToolCall` flag that was shared across all tools. In Vercel's serverless environment, each request creates a new `McpServer` instance, so the flag reset unpredictably. A dedicated tool with a strong "ALWAYS call this FIRST" description removes the ambiguity entirely.
-
----
-
-## betaPrefix removed from data tools
-
-An earlier version used a `betaPrefix()` function that prepended the beta notice to the first data tool call as a fallback in case `session_init` was skipped.
-
-**Why it was removed:** It merged two concerns in one response. The model cannot cleanly separate "here is the notice to show the user" from "here is the data to interpret." Combined with the serverless reset problem above, it could fire at unexpected times mid-conversation. The `session_init` tool handles this job cleanly on its own.
+**Path to here:** The first approach prepended the notice to every data tool response via a `betaPrefix()` function sharing an `isFirstToolCall` flag. In Vercel's serverless environment each request creates a fresh `McpServer` instance, so the flag reset unpredictably and the notice fired mid-conversation. This was replaced by a `session_init` tool with a "ALWAYS call this FIRST" description — but that caused its own problem: models called it on every conversation restart, and it added latency. The MCP SDK's `instructions` field delivers server-level context to the model without a round-trip tool call, which is the correct mechanism for this purpose. Do not reintroduce a `session_init` tool.
 
 ---
 
-## Nested variants in list_products_in_category
+## MAPI as the default for reads
 
-Products are returned with VARIANT products nested under their GROUP parent rather than as a flat list with `variantParentId` references.
+All default read tools (`list_catalogs`, `list_products_in_category`) use MAPI, not PAPI. Separate `list_published_*` tools exist for PAPI reads.
 
-**Why:** A flat list of mixed GROUPs, VARIANTs, and SINGLEs gives the model no structural signal. Without nesting, models tended to list VARIANTs as standalone top-level products. Nesting makes the hierarchy explicit in the data so the model reproduces it correctly without needing display instructions alone to carry that weight.
+**Why:** The primary users of this MCP are enrichment teams working on product data before it is published. PAPI returns only published/synced data — it cannot show unpublished attributes, draft catalog structures, or newly created products that haven't been synced yet. MAPI returns working state and is what Bluestone's own UI uses for enrichment. Using PAPI for default reads was a fundamental misalignment. The working state vs published distinction is surfaced explicitly in tool names, descriptions, and response summary lines so the model and user always know which they are looking at.
+
+---
+
+## Flat product list in list_products_in_category
+
+MAPI's `/pim/catalogs/nodes/{id}/products` returns a flat list of `{ productId, productName }` with no type field and no variant structure.
+
+**Why this is fine:** The GROUP/VARIANT nesting logic existed in the PAPI version because PAPI returned type and `variantParentId` and the tool tried to reconstruct the hierarchy. MAPI's node-product list is a flat listing of what is in that node — the hierarchy is already encoded in the node tree returned by `list_catalogs`. Products that need full detail (including type and attributes) are fetched individually via `get_product` (planned). The flat list is simpler, faster, and avoids the cross-page orphan problem that the PAPI nesting logic had to handle.
+
+---
+
+## Context (language/market) via request header
+
+MAPI and Search endpoints accept a `context` request header that controls which language/market variant of the data is returned. The default is `"en"`.
+
+**Why a header, not a query param:** This is Bluestone's API design — context is a routing header, not a filter parameter. The `mapiGet` helper accepts an optional `{ context }` option and forwards it as a header. Tools expose `context` as an optional input parameter so the model can pass it through. The model tracks the active context for the conversation naturally without server-side session state. The `list_contexts` tool provides the vocabulary (context IDs and names) so the model can resolve "switch to Dutch" into the right ID.
 
 ---
 
@@ -62,12 +70,15 @@ Claude Desktop and RFC 7591-compliant clients (Cursor, VS Code, ChatGPT) both hi
 
 ---
 
-## Pagination via Bluestone PAPI's itemsOnPage + pageNo
+## Pagination
 
-`list_products_in_category` passes `itemsOnPage` and `pageNo` to the Bluestone API rather than fetching all results and slicing client-side.
+All list tools expose `limit` and `page` (1-indexed) to the model. The two APIs have different internal param names and indexing — the tools convert internally.
 
-**Why:** Categories can contain hundreds of products. Fetching the full set on every call is slow, produces large payloads, and risks filling the model's context window. Server-side pagination keeps responses bounded. The `hasMore` and `totalPages` fields in the response tell the model when to offer to fetch the next page.
+| API | Internal params | Indexing | Default page size |
+|---|---|---|---|
+| PAPI | `itemsOnPage` + `pageNo` | 0-indexed | set by caller |
+| MAPI node products | `page` + `pageSize` | 0-indexed | 1000 |
 
-The tool exposes `limit` and `page` as input parameters (cleaner names for the model) and maps them to Bluestone's `itemsOnPage` and `pageNo` internally.
+MAPI's large default (1000) means most category node listings fit in a single call. The `list_products_in_category` tool still accepts a `limit` param to keep responses bounded and avoid flooding the model's context window.
 
-**Cross-page GROUP/VARIANT splits:** With page-based pagination, a GROUP product and some of its VARIANTs may land on different pages. Orphaned VARIANTs (those whose parent GROUP is not in the current page's results) are included as standalone items rather than silently dropped — their `type` field still identifies them correctly.
+MAPI's node products endpoint does not return `totalCount`. `hasMore` is inferred: if the returned count equals the requested page size, there may be more. PAPI responses include `totalCount`, so `totalPages` can be computed exactly for `list_published_products_in_category`.

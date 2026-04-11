@@ -18,6 +18,11 @@ server.registerTool(
       "What this tool does and when to call it. " +
       "Mention which other tool to call first if an ID is needed. " +
       "State what to suppress unless the user specifically asks.",
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+    },
     inputSchema: {
       someId: z.string().describe("The ID — get this from your_other_tool"),
     },
@@ -66,18 +71,22 @@ For other HTTP methods (PATCH, PUT, DELETE), add a helper following the same pat
 ```typescript
 async function mapiPatch(path: string, body: unknown, creds: Credentials): Promise<void> {
   const token = await getBearerToken(creds);
-  const res = await fetch(`${MAPI_BASE}${path}`, {
-    method: "PATCH",
-    headers: {
-      accept: "application/json",
-      "content-type": "application/json",
-      authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const responseText = await res.text();
-    throw new Error(mapiErrorMessage(res.status, responseText));
+  let res: Response;
+  try {
+    res = await fetch(`${MAPI_BASE}${path}`, {
+      method: "PATCH",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+      signal: timeoutSignal(),
+    });
+  } catch (err) { wrapFetchError(err, "Bluestone MAPI"); }
+  if (!res!.ok) {
+    const responseText = await res!.text();
+    throw new Error(mapiErrorMessage(res!.status, responseText));
   }
 }
 ```
@@ -88,7 +97,12 @@ async function mapiPatch(path: string, body: unknown, creds: Credentials): Promi
 server.registerTool(
   "update_product_name",
   {
-    description: "Update the name of a product in Bluestone PIM. Use the product ID from list_products_in_category.",
+    description: "Update the name of a product in Bluestone PIM. Use the product ID from list_products_in_category. Always confirm the new name with the user before calling.",
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+    },
     inputSchema: {
       productId: z.string().describe("The product ID to update"),
       newName: z.string().describe("The new product name"),

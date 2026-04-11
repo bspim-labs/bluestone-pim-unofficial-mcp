@@ -26,17 +26,29 @@ This is a **Model Context Protocol (MCP) server** for Bluestone PIM, with two de
 
 All MCP tools are registered inside a single `createMcpServer(creds: Credentials)` factory function. This function is imported by both entry points. Current tools:
 
-- `list_catalogs` — calls Bluestone PAPI `/categories`
-- `list_products_in_category` — calls PAPI `/categories/:id/products?subCategories=true`
-- `create_product` — calls Bluestone MAPI `/pim/products` via `mapiPost()`
+- `list_contexts` — calls MAPI Global Settings `/global-settings/context` via `mapiGet()`
+- `list_catalogs` — calls MAPI `/pim/catalogs` + `/pim/catalogs/{id}/nodes` (parallel) via `mapiGet()`
+- `list_products_in_category` — calls MAPI `/pim/catalogs/nodes/{id}/products` via `mapiGet()`
+- `list_published_catalogs` — calls PAPI `/categories` via `papiGet()` (published/live data only)
+- `list_published_products_in_category` — calls PAPI `/categories/{id}/products` via `papiGet()` (published/live data only)
+- `create_product` — calls MAPI `/pim/products` via `mapiPost()`
 
-The beta notice is delivered via the `instructions` field on `McpServer` (server-level context, not a tool call). Do not add a `session_init` tool — this was an earlier approach that was replaced.
+The beta notice and capability summary are delivered via the `instructions` field on `McpServer` (server-level context, not a tool call). Do not add a `session_init` tool — this was an earlier approach that was replaced.
 
-Two API layers exist:
-- **PAPI** (`papiGet`): public read API, authenticated with a static `x-api-key` header. Pagination: `itemsOnPage` + `pageNo` (0-indexed doubles).
-- **MAPI** (`mapiPost`): management write API, authenticated with OAuth 2.0 client credentials (`getBearerToken()`). Tokens are cached in memory per `mapiClientId` and refreshed 60s before expiry. Pagination: `page` + `pageSize`.
+**MAPI is the default for reads.** Working state data (including unpublished changes) comes from MAPI. PAPI is reserved for the `list_published_*` tools that explicitly return live/synced data only. See `docs/mcp-design.md` for the reasoning.
 
-The pagination param names differ between the two APIs. Expose 1-indexed `page` to the model in both cases and convert internally.
+Three MAPI API families share the same Bearer token and base domain (`api.test.bluestonepim.com`):
+- **`/pim`** (`MAPI_PIM_BASE`): products, catalogs, attributes, categories
+- **`/search`** (`MAPI_SEARCH_BASE`): full-text and structured product search
+- **`/global-settings`** (`MAPI_GLOBAL_SETTINGS_BASE`): contexts (languages/markets)
+
+Two auth methods:
+- **PAPI** (`papiGet`): `x-api-key` header (static). Pagination: `itemsOnPage` + `pageNo` (0-indexed doubles).
+- **MAPI** (`mapiGet`, `mapiPost`): `Authorization: Bearer` via OAuth 2.0 client credentials (`getBearerToken()`). Tokens are cached in memory per `mapiClientId` and refreshed 60s before expiry. Pagination: `page` + `pageSize` (0-indexed).
+
+Both APIs expose 1-indexed `page` to the model — subtract 1 internally before passing to either API.
+
+Most MAPI read endpoints accept a `context` header (language/market, e.g. `"en"`, `"l3600"`). Pass it via `mapiGet(url, creds, { context })`. Default is `"en"`. Call `list_contexts` to enumerate available values.
 
 ### Entry point 1: `src/index.ts` — local STDIO mode
 
@@ -58,9 +70,14 @@ Vercel routing is in `vercel.json` — all OAuth and MCP paths rewrite to `/api/
 
 ### Adding new tools
 
-Register inside `createMcpServer()` in `src/tools.ts` using `papiGet<T>()` for reads or `mapiPost<T>()` for writes. For other HTTP methods (PATCH, PUT, DELETE), add a helper following the `mapiPost` pattern.
+Register inside `createMcpServer()` in `src/tools.ts`:
+- Working state reads: `mapiGet<T>(url, creds, { context? })` — use `MAPI_PIM_BASE`, `MAPI_SEARCH_BASE`, or `MAPI_GLOBAL_SETTINGS_BASE` to construct the URL.
+- Published reads: `papiGet<T>(path, creds)` — only for `list_published_*` tools.
+- Writes: `mapiPost<T>(path, body, creds)`. For PATCH/PUT/DELETE, add a helper following the `mapiPost` pattern.
 
-Before adding a tool, read **`docs/mcp-patterns.md`** — it defines the required checklist for descriptions, response format, pagination, and error handling. See `docs/extending.md` for code skeletons.
+Before adding a tool, read **`docs/mcp-patterns.md`** — it defines the required checklist for descriptions, response format, pagination, error handling, and annotations. See `docs/extending.md` for code skeletons.
+
+Every tool **must** include `annotations` with `readOnlyHint`, `destructiveHint`, and `idempotentHint`. Read tools get `readOnlyHint: true, destructiveHint: false, idempotentHint: true`. Write tools get `readOnlyHint: false, destructiveHint: true, idempotentHint: false`. A tool registered without annotations is incomplete — do not leave this out.
 
 **`docs/mcp-patterns.md` applies to any change in `src/tools.ts`**, not just new tools. When modifying an existing tool's description, response, error handling, or follow-up behaviour, check the relevant pattern sections before and after making the change.
 

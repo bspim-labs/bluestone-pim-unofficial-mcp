@@ -158,11 +158,12 @@ Almost nothing, if we are being honest. A handful of example tools, but the poin
 
 **What works today:**
 
-- **Browse your catalogs**: ask the AI to list all categories in your organisation
-- **Explore products**: list all products in a category, including subcategories, with full attribute values and media info
+- **Browse your catalogs**: ask the AI to list all categories in your organisation, including the full category tree
+- **Explore products**: list all products in a category node. When you ask for products, you see your current working data, including changes your team has made today that have not been published yet. Ask specifically for "published products" if you want to see only what is live.
+- **Switch language**: ask to see data in a specific language and the AI finds the right context
 - **Create a product**: create a new product by name (the server instructs the AI to confirm the name before calling the tool, though this depends on the client)
 
-**What isn't supported yet:** The list is too long. Feel free to fork and add your own tools!
+**What to expect for now:** Browsing and creating work. Product attribute detail and editing are not yet supported — if you ask the AI to show attributes on a specific product, or to update a field, it will tell you it cannot. For that kind of work, Bluestone PIM's own interface is still the right place. This is a foundation to build on, not a replacement.
 
 This project is not intended to compete with or replace an official Bluestone PIM MCP integration. It is an independent experiment, a proof of concept exploring what becomes possible when Bluestone PIM is made accessible to AI assistants. We hope it demonstrates the value of that connection and serves as a useful reference point for anyone building towards an official solution.
 
@@ -181,9 +182,10 @@ A few principles guided the design:
 
 A few concrete decisions that followed from those principles:
 
-- **No database.** Session state is AES-256-GCM encrypted into the bearer token itself. The server has no persistent storage.
+- **No database.** Session state is AES-256-GCM encrypted into the bearer token itself. The server has no persistent storage — and no credentials to steal.
 - **The beta notice is delivered via server instructions**, sent during the MCP handshake before any tools are called. This is the correct channel for server-level context — not a tool the model must remember to call first.
-- **Variants are nested under their parent product group** in responses, so the model reproduces the correct hierarchy without needing extra instructions at query time.
+- **Working state by default, published on request.** Bluestone PIM has two data layers: working state (what your team is enriching right now, including unpublished drafts) and published (what has been synced and is live). The default read tools return working state from the management API, because that is what enrichment teams actually need to work with. Separate tools are available when you specifically ask for published data.
+- **Language switching without server state.** The server exposes a context parameter on read tools corresponding to Bluestone's language and market settings. When you ask for data in a specific language, the AI looks up the right context ID and passes it on subsequent calls — no session is needed on the server side. The model tracks the active language for the conversation naturally.
 
 If you are building on top of this or forking it, the [patterns and design docs](https://github.com/leafleaf90/bluestone-pim-unofficial-mcp/tree/main/docs) in the repo go into more detail.
 

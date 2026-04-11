@@ -182,7 +182,7 @@ The current implementation is suitable for a beta/internal deployment. The follo
 |---|---|---|
 | **redirect_uri validation** | Blocks `javascript:` and `data:` only — custom schemes and plain HTTP are accepted | Enforce an allowlist of registered redirect URIs per client. Store URIs at `/register` time and verify them at `/authorize`. |
 | **Client registration persistence** | Stateless — any opaque `client_id` is accepted at `/authorize` | Persist registered clients (e.g. Vercel KV) and reject unregistered `client_id`s at `/authorize`. |
-| **Rate limiting** | None | Add rate limiting to `/authorize`, `/token`, and `/register` to prevent enumeration and abuse. |
+| **Rate limiting** | `/mcp` is rate-limited (60 req/min per IP, in-memory). `/authorize`, `/token`, and `/register` are not. | The in-memory store is per Vercel instance — not globally consistent across concurrent instances. For strict global limits, replace with a Redis-backed store (e.g. `rate-limit-redis` + Vercel KV or Upstash). Also add rate limiting to the auth endpoints. |
 | **CSP** | `'unsafe-inline'` for styles; no `form-action` restriction (CSRF is handled by HMAC token instead) | Add a per-request nonce to remove `'unsafe-inline'`; re-evaluate `form-action` once routing behaviour is confirmed. |
 | **MAPI token cache** | In-memory per Vercel instance (accidental statefulness) | Move to an external cache (e.g. Vercel KV) so tokens survive across cold starts and concurrent instances. |
 | **Direct header fallback** | `x-papi-key` / `x-mapi-client-id` / `x-mapi-client-secret` headers bypass OAuth | Remove this fallback, or restrict it to requests from trusted IPs only. |

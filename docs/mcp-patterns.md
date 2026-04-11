@@ -71,7 +71,7 @@ return {
     {
       type: "text" as const,
       text:
-        `Found ${count} products in "${label}".\n\n` +
+        `Found ${count} products in "${label}" (working state).\n\n` +
         JSON.stringify(data, null, 2),
     },
   ],
@@ -79,6 +79,18 @@ return {
 ```
 
 The summary line states the key facts. The JSON is present for the model to query when the user asks for specifics.
+
+**Always label the data source in the summary line.** Append `(working state)` for MAPI reads, `(published)` for PAPI reads. This lets the model tell the user which version of the data they are looking at without requiring them to know which tool was called.
+
+```
+// MAPI tools
+"Found 3 catalogs (working state)."
+"Found products in \"Pasta\" (working state). Returned 8 on page 1."
+
+// PAPI tools
+"Found 3 published catalogs."
+"Found 24 published products in \"Pasta\"."
+```
 
 ### Write tools: plain text only
 
@@ -94,6 +106,27 @@ return {
 ```
 
 No JSON wrapper. A mutation has no structured data for the model to reason over — a confirmation string is all that is needed.
+
+---
+
+## Tool annotations
+
+Every tool must declare annotations. They tell compliant clients how to handle the tool — whether to auto-execute it, whether to warn the user, and whether calling it twice is safe.
+
+```typescript
+annotations: {
+  readOnlyHint: true,   // true for reads; false for any tool that writes, updates, or deletes
+  destructiveHint: false, // true if the action is hard to undo (create, delete, overwrite)
+  idempotentHint: true,   // true if calling twice has the same effect as calling once
+}
+```
+
+Rules:
+- Read tools: `readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`
+- Write tools (create/update/delete): `readOnlyHint: false`, `destructiveHint: true`, `idempotentHint: false`
+- An update that is safe to retry (e.g. setting a field to the same value) may set `idempotentHint: true`
+
+Annotations are hints to the client, not enforced by the protocol. But omitting them leaves the client to assume worst-case defaults, which means unnecessary confirmation prompts on read tools and no extra caution on writes.
 
 ---
 
@@ -119,7 +152,7 @@ Rules:
 
 ## Pagination
 
-Any tool that returns a list must accept `limit` and `page`. Bluestone's PAPI uses `itemsOnPage` and `pageNo` (0-indexed doubles). The tool exposes 1-indexed pages to the model and subtracts 1 before passing to Bluestone.
+Any tool that returns a list must accept `limit` and `page`. Both APIs use 0-indexed pagination internally — the tool always exposes 1-indexed `page` to the model and subtracts 1 before passing to Bluestone. PAPI uses `itemsOnPage`/`pageNo`; MAPI uses `page`/`pageSize`. See `docs/mcp-design.md` for the full comparison.
 
 ```typescript
 inputSchema: {
@@ -195,10 +228,11 @@ The same applies when a tool's scope is intentionally narrow. If `create_product
 - [ ] No **session_init reminder** in the description
 - [ ] Write tools include **"confirm with user before calling"**
 - [ ] Write tools specify **what NOT to offer as follow-up** if next steps aren't supported
-- [ ] Response starts with a **plain-text summary line**
+- [ ] Response starts with a **plain-text summary line** with **(working state)** or **(published)** label
 - [ ] Mutations return **plain text only** (no JSON)
 - [ ] List tools have **limit + offset** input params
 - [ ] List responses include **hasMore, offset, returned** in JSON
 - [ ] Errors use **papiErrorMessage / mapiErrorMessage** helpers
 - [ ] All input params have a **`.describe()` call**
 - [ ] ID params tell the model **where to get them**
+- [ ] Tool has **`annotations`** with `readOnlyHint`, `destructiveHint`, and `idempotentHint` set

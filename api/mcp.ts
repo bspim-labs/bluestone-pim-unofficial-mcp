@@ -1,5 +1,6 @@
 import express, { Request, Response } from "express";
 import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import {
   createHash,
   createHmac,
@@ -18,6 +19,19 @@ const app = express();
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Rate limiting on /mcp — 60 requests per minute per IP.
+// Note: in-memory store per Vercel instance; not globally consistent across
+// concurrent instances. Sufficient for abuse prevention at this scale.
+// For strict global limits, replace the default store with a Redis-backed one
+// (e.g. rate-limit-redis) pointing at Vercel KV or Upstash.
+const mcpRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Too many requests — please wait a moment and try again." },
+});
 
 // ─── Signing secret ───────────────────────────────────────────────────────────
 //
@@ -547,7 +561,7 @@ app.post("/token", (req: Request, res: Response) => {
 // app.all is intentional — the MCP SDK's handleRequest needs to handle both
 // GET (SSE stream initiation) and POST (JSON-RPC calls) on the same path.
 
-app.all("/mcp", async (req: Request, res: Response) => {
+app.all("/mcp", mcpRateLimiter, async (req: Request, res: Response) => {
   if (!requireSigningSecret(res)) return;
 
   let creds: Credentials | null = null;

@@ -24,15 +24,19 @@ A scannable reference for adding new tools. For detailed request/response shapes
 
 ---
 
-## Two APIs, two auth methods
+## Two auth methods, one base domain
 
-| | PAPI (Page API) | MAPI (PIM API) |
+Base domain: `https://api.test.bluestonepim.com`
+
+| | PAPI (Page API) | MAPI family (PIM, Search, Global Settings) |
 |---|---|---|
-| Base URL | `https://api.test.bluestonepim.com/v1` | `https://api.test.bluestonepim.com/pim` |
+| Base paths | `/v1` | `/pim`, `/search`, `/global-settings` |
 | Auth | `x-api-key` header (static) | `Authorization: Bearer <token>` (OAuth2 client credentials) |
-| Access | Read-only | Full CRUD |
+| Access | Read-only, published data | Full CRUD, working state |
 | Token URL | n/a | `https://idp.test.bluestonepim.com/op/token` |
-| Helper in tools.ts | `papiGet()` | `mapiPost()` + `getBearerToken()` |
+| Helper in tools.ts | `papiGet()` | `mapiPost()` + `mapiGet()` (to add) + `getBearerToken()` |
+
+Define one `API_BASE` constant and named constants per base path (`MAPI_BASE`, `SEARCH_BASE`, `GLOBAL_SETTINGS_BASE`). Pass full URLs to helpers. This makes production environment support a one-line change.
 
 ---
 
@@ -45,22 +49,28 @@ A scannable reference for adding new tools. For detailed request/response shapes
 ```
 Expose as 1-indexed to the model; subtract 1 before passing to Bluestone.
 
-**MAPI:** `page` + `pageSize` (integers; assumed 0-indexed — verify before use)
+**MAPI `/pim/catalogs/nodes/{id}/products`:** `page` + `pageSize` (integers, **0-indexed**, default pageSize 1000)
 ```
-?page=0&pageSize=50
+?page=0&pageSize=100   ← first page
+?page=1&pageSize=100   ← second page
 ```
+Expose as 1-indexed to the model; subtract 1 before passing. Default of 1000 means most node listings fit in one call.
 
-Both return `totalCount` in the response body alongside `results`.
+**Search API `/search/products/search` and `/search/find`:** `page` + `pageSize` (1-indexed, max pageSize 100 for structured search, 1000 for full-text `find`)
+
+Response shape varies — see Search endpoints section below. Not all MAPI responses include `totalCount`; the node products endpoint returns `{ data: [...] }` with no count.
 
 ---
 
-## Common query parameters
+## Common parameters
 
-| Parameter | Where | Meaning |
-|---|---|---|
-| `context` | PAPI + MAPI | Publication/channel context (language, market). Use `GET /contexts` (PAPI) to list available values. |
-| `archiveState` | MAPI | `ACTIVE` (default), `ARCHIVED`, or `ALL` |
-| `subCategories` | PAPI `/categories/{id}/products` | `true` to include nested subcategories — always use this |
+| Parameter | Type | Where | Meaning |
+|---|---|---|---|
+| `context` | **header** | MAPI + Search | Language/market context. Default `"en"`. Custom context IDs start with lowercase `"l"` (not digit `"1"`) followed by a number, e.g. `"l3600"`. Use `GET /global-settings/context` (Bearer auth) to list available values. Pass as `context: <value>` request header. |
+| `archiveState` | query param | MAPI | `ACTIVE` (default), `ARCHIVED`, or `ALL` |
+| `subCategories` | query param | PAPI `/categories/{id}/products` | `true` to include nested subcategories — always use this |
+
+The `context` header should be exposed as an optional parameter on any tool that reads language-sensitive data (product names, attribute values, descriptions). When omitted, Bluestone defaults to `"en"`.
 
 ---
 
@@ -89,6 +99,61 @@ Bluestone has four attribute types, each with its own create/update endpoint:
 | `compound` | A group of sub-definitions; see `/compoundDefinitions` |
 
 When setting attributes via MAPI, the endpoint varies by type (e.g. `/products/{id}/attributes/dictionary` vs `/products/{id}/attributes`). Always check the type before choosing the endpoint.
+
+---
+
+## Search endpoints
+
+Base URL: `https://api.test.bluestonepim.com/search`. Same Bearer token auth as MAPI.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/find` | Full-text search across product name, description, number, attributes. Params: `query`, `searchableFields`, `fuzziness` (ZERO/ONE/TWO/AUTO), `highlight`, `fragmentSize`, `page`, `pageSize` (max 1000). Returns `{ data: [string], total: int }`. |
+| POST | `/products/search` | Structured search with rich filters: `typeFilter`, `categoryFilters`, `attributeFilters`, `publishStateFilter`, `validationStatusFilter`, date filters, score filters. `pageSize` max 100. **Returns IDs only** (`MatchedProduct` with id). Requires follow-up fetch to get names. |
+| POST | `/products/scroll/search` | Same as above but scroll-based pagination via `scrollId` — better for large result sets. |
+| POST | `/products/count` | Count products matching a filter set. Same filter shape as `/products/search`, no pagination. Returns `{ count: int }`. |
+| POST | `/assets/search` | Search assets. Filters: name, products, categories, labels, media type, dimensions, file size. `resultsPerPage` max 100. |
+| POST | `/assets/cursor` | Cursor-based asset search — better for streaming large asset lists. |
+| POST | `/assets/count` | Count assets matching filters. |
+
+**Key decision:** Use `GET /find` for the `search_products` tool (returns names natively). Use `POST /products/search` only when structured filtering (by type, category, validation state) is needed and IDs are sufficient.
+
+---
+
+## Confirmed MAPI response shapes
+
+From direct testing against `api.test.bluestonepim.com`:
+
+**`GET /pim/catalogs`**
+```json
+{ "data": [{ "id", "name", "number", "description", "readOnly", "assets" }] }
+```
+No `totalCount`. No pagination metadata in response body.
+
+**`GET /pim/catalogs/{id}/nodes`**
+Returns the full nested tree rooted at the catalog node. Each node has `children: []` recursively. Not a flat list — must walk the tree to enumerate all nodes.
+
+**`GET /pim/catalogs/nodes/{id}/products`**
+```json
+{ "data": [{ "productId", "productName" }] }
+```
+Minimal shape — no attributes, no product type, no pagination metadata. Use `page`/`pageSize` query params to page.
+
+**`GET /pim/products/{id}/groupedAttributes`**
+```json
+{
+  "data": [{
+    "groupId": "<id>",
+    "attributes": [{
+      "definitionId": "<id>",
+      "values": ["string value"],      // for plain attributes
+      "dictionary": ["<option-id>"],   // for dictionary attributes
+      "readOnly": false
+    }]
+  }]
+}
+```
+All IDs — `groupId`, `definitionId`, and dictionary option values are opaque IDs. To display human-readable names, resolve via `GET /pim/definitions` (for attribute names) and `GET /pim/definitions/dictionary/{id}/values/list` (for dictionary option labels).
 
 ---
 
@@ -189,7 +254,7 @@ When setting attributes via MAPI, the endpoint varies by type (e.g. `/products/{
 
 | Endpoint | API | What it returns |
 |---|---|---|
-| `GET /contexts` | PAPI | Available publication contexts (language/market) |
+| `GET /global-settings/context` | Global Settings (Bearer) | Available contexts (languages/markets). Returns `{ data: [{ id, name, locale, fallback, initial, archived }] }`. `initial: true` marks the default context. Filter out `archived: true`. |
 | `GET /syncs` | PAPI | Publish history and sync states |
 | `GET /differences/products` | PAPI | Products changed since last sync (useful for "what changed?") |
 | `GET /async/status/{taskId}` | MAPI | Status of a background/bulk operation |
