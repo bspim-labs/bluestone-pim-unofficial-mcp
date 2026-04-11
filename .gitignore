@@ -3,3 +3,4 @@ build/
 .env
 .vercel
 TODO.md
+.DS_Store

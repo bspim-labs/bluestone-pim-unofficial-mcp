@@ -53,4 +53,6 @@ Vercel routing is in `vercel.json` — all OAuth and MCP paths rewrite to `/api/
 
 ### Adding new tools
 
-Register inside `createMcpServer()` in `src/tools.ts` using `papiGet<T>()` for reads or `mapiPost<T>()` for writes. For other HTTP methods (PATCH, PUT, DELETE), add a helper following the `mapiPost` pattern. See `docs/extending.md` for skeletons.
+Register inside `createMcpServer()` in `src/tools.ts` using `papiGet<T>()` for reads or `mapiPost<T>()` for writes. For other HTTP methods (PATCH, PUT, DELETE), add a helper following the `mapiPost` pattern.
+
+Before adding a tool, read **`docs/mcp-patterns.md`** — it defines the required checklist for descriptions, response format, pagination, and error handling. See `docs/extending.md` for code skeletons.

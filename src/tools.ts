@@ -50,6 +50,7 @@ interface ProductMedia {
   id: string;
   downloadUri: string;
   previewUri: string;
+  name?: string;
   fileName: string;
   contentType: string;
   labels: string[];
@@ -80,6 +81,10 @@ const PAPI_BASE = "https://api.test.bluestonepim.com/v1";
 const MAPI_BASE = "https://api.test.bluestonepim.com";
 const MAPI_TOKEN_URL = "https://idp.test.bluestonepim.com/op/token";
 
+const DEFAULT_PRODUCT_LIMIT = 50;
+const MAX_PRODUCT_LIMIT = 200;
+const DEFAULT_PAGE = 1;
+
 // ─── Token cache (per clientId for multi-tenant) ──────────────────────────────
 //
 // Note: in a serverless environment (Vercel) this cache is per cold-start instance
@@ -102,7 +107,8 @@ async function getBearerToken(creds: Credentials): Promise<string> {
     }),
   });
   if (!res.ok) {
-    throw new Error(`Failed to obtain bearer token: ${res.status} ${res.statusText}`);
+    const body = await res.text();
+    throw new Error(mapiErrorMessage(res.status, body));
   }
   const { access_token, expires_in } = (await res.json()) as {
     access_token: string;
@@ -113,6 +119,40 @@ async function getBearerToken(creds: Credentials): Promise<string> {
     expiresAt: Date.now() + expires_in * 1000,
   });
   return access_token;
+}
+
+// ─── Error helpers ────────────────────────────────────────────────────────────
+
+function papiErrorMessage(status: number, body: string): string {
+  switch (status) {
+    case 401:
+      return "Authentication failed (401). Your PAPI key may be invalid or expired.";
+    case 403:
+      return "Access denied (403). Your PAPI key does not have permission for this resource.";
+    case 404:
+      return `Resource not found (404).${body ? " " + body : ""}`;
+    case 429:
+      return "Rate limit exceeded (429). Wait a moment and try again.";
+    default:
+      return `Bluestone PAPI error ${status}: ${body || "Unknown error"}`;
+  }
+}
+
+function mapiErrorMessage(status: number, body: string): string {
+  switch (status) {
+    case 401:
+      return "Authentication failed (401). MAPI credentials may be invalid or expired.";
+    case 403:
+      return "Access denied (403). The MAPI client does not have permission for this operation.";
+    case 404:
+      return `Resource not found (404).${body ? " " + body : ""}`;
+    case 409:
+      return "Conflict (409). A resource with this name or ID may already exist.";
+    case 429:
+      return "Rate limit exceeded (429). Wait a moment and try again.";
+    default:
+      return `Bluestone MAPI error ${status}: ${body || "Unknown error"}`;
+  }
 }
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
@@ -126,7 +166,7 @@ async function papiGet<T>(path: string, creds: Credentials): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Bluestone PAPI error ${res.status}: ${body || res.statusText}`);
+    throw new Error(papiErrorMessage(res.status, body));
   }
   return res.json() as Promise<T>;
 }
@@ -147,8 +187,8 @@ async function mapiPost<T>(
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Bluestone MAPI error ${res.status}: ${body || res.statusText}`);
+    const text = await res.text();
+    throw new Error(mapiErrorMessage(res.status, text));
   }
   const text = await res.text();
   const data = (text ? JSON.parse(text) : {}) as T;
@@ -167,70 +207,56 @@ function formatAttributeValue(attr: ProductAttribute): string {
   return "(no value)";
 }
 
+function mapProduct(p: Product) {
+  const attrs = p.attributes
+    .filter((a) => a.values.length > 0 || (a.dictionary && a.dictionary.length > 0))
+    .map((a) => ({
+      group: a.groupName,
+      name: a.name,
+      value: formatAttributeValue(a),
+      ...(a.definingAttribute && { definingAttribute: true }),
+    }));
+  return {
+    name: p.name,
+    number: p.number,
+    type: p.type,
+    id: p.id,
+    lastUpdated: new Date(p.lastUpdate).toISOString(),
+    ...(p.media.length > 0 && {
+      media: p.media.map((m) => ({
+        name: m.name ?? m.labels[0] ?? m.fileName,
+        previewUri: m.previewUri,
+        fileName: m.fileName,
+        type: m.contentType,
+      })),
+    }),
+    attributes: attrs,
+  };
+}
+
 // ─── Server factory ───────────────────────────────────────────────────────────
 
 export function createMcpServer(creds: Credentials): McpServer {
-  let isFirstToolCall = true;
-
-  function betaPrefix(): string {
-    if (isFirstToolCall) {
-      isFirstToolCall = false;
-      return (
-        "⚠️ SHOW THIS TO THE USER FIRST — Beta / Unofficial Experiment\n\n" +
+  const server = new McpServer(
+    {
+      name: "bluestone-pim",
+      version: "1.0.0",
+    },
+    {
+      instructions:
+        "⚠️ Bluestone PIM MCP — Beta / Unofficial Experiment\n\n" +
         "This is an early, unofficial MCP integration for Bluestone PIM. It is currently very limited.\n\n" +
         "What it can do right now:\n" +
-        "• List all categories (catalogs)\n" +
-        "• List all products in a category (with attributes and media info)\n" +
-        "• Create a new product (name only)\n\n" +
+        "• List all catalogs in the organisation\n" +
+        "• List all products within a catalog (incl. subcategories), with attributes and media info\n" +
+        "• Create a new product (name only — no attributes or category assignment yet)\n\n" +
         "What it cannot do yet:\n" +
         "• Assign products to categories\n" +
-        "• Set attributes or media\n" +
-        "• Update or delete products\n\n" +
-        "Present this to the user and ask if they want to proceed before using the data below.\n" +
-        "─────────────────────────────────────\n\n"
-      );
+        "• Set product attributes or media\n" +
+        "• Update or delete products\n" +
+        "• Anything beyond the three operations above\n\n" +
+        "Always confirm the product name with the user before calling create_product.",
     }
-    return "";
-  }
-
-  const server = new McpServer({
-    name: "bluestone-pim",
-    version: "1.0.0",
-  });
-
-  // Tool 0: session_init — must be called first in every conversation
-  server.registerTool(
-    "session_init",
-    {
-      description:
-        "ALWAYS call this tool FIRST at the start of every conversation, before doing anything else " +
-        "(before asking questions, before calling any other tool). " +
-        "It returns a beta notice that must be shown to the user. " +
-        "After showing the notice, ask the user if they want to proceed with their original request.",
-      inputSchema: {},
-    },
-    () => ({
-      content: [
-        {
-          type: "text" as const,
-          text:
-            "⚠️ Bluestone PIM MCP — Beta / Unofficial Experiment\n\n" +
-            "This is an early, unofficial MCP integration for Bluestone PIM. It is currently very limited.\n\n" +
-            "What it can do right now:\n" +
-            "• List all categories (catalogs) in the organisation\n" +
-            "• List all products within a category (incl. subcategories), with attributes and media info\n" +
-            "• Create a new product (name only — no attributes or category assignment yet)\n\n" +
-            "What it cannot do yet:\n" +
-            "• Assign products to categories\n" +
-            "• Set product attributes or media\n" +
-            "• Update or delete products\n" +
-            "• Anything beyond the three operations above\n\n" +
-            "Show this notice to the user verbatim, then ask: " +
-            "\"Would you like to go ahead with your original request?\" " +
-            "Only proceed once they confirm.",
-        },
-      ],
-    })
   );
 
   // Tool 1: list_catalogs
@@ -238,10 +264,10 @@ export function createMcpServer(creds: Credentials): McpServer {
     "list_catalogs",
     {
       description:
-        "List all categories (catalogs) in the Bluestone PIM organisation, sorted by display order. " +
-        "Returns each category's name and ID. Category attributes are included in the result — " +
-        "present them only if the user specifically asks about them. " +
-        "IMPORTANT: Call session_init first if this is the first tool call in the conversation.",
+        "List all catalogs in the Bluestone PIM organisation, sorted by display order. " +
+        "Returns each catalog's name and ID. " +
+        "Call this first to get category IDs before using list_products_in_category. " +
+        "Category attribute definitions are included in the result — present them only if the user specifically asks about them.",
       inputSchema: {},
     },
     async () => {
@@ -262,7 +288,9 @@ export function createMcpServer(creds: Credentials): McpServer {
         content: [
           {
             type: "text" as const,
-            text: betaPrefix() + JSON.stringify({ totalCount: data.totalCount, categories }, null, 2),
+            text:
+              `Found ${data.totalCount} catalog${data.totalCount === 1 ? "" : "s"} in this organisation.\n\n` +
+              JSON.stringify({ totalCount: data.totalCount, categories }, null, 2),
           },
         ],
       };
@@ -274,57 +302,118 @@ export function createMcpServer(creds: Credentials): McpServer {
     "list_products_in_category",
     {
       description:
-        "List all products in a Bluestone PIM category (including subcategories). " +
-        "Returns product name, item number, type (GROUP/VARIANT/SINGLE), and ID. " +
-        "Full attribute values are included — present them when the user asks for details on a specific product. " +
-        "GROUP products are parent products with variants listed under them. " +
-        "IMPORTANT: Call session_init first if this is the first tool call in the conversation.",
+        "List products in a Bluestone PIM catalog (including subcategories). " +
+        "Call list_catalogs first to get valid category IDs.\n\n" +
+        "Product types:\n" +
+        "• GROUP — a parent product with variants. Its variants are nested under it in the response.\n" +
+        "• VARIANT — a child of a GROUP (e.g. a size or colour variant). Always displayed indented beneath its parent GROUP, never as a standalone item.\n" +
+        "• SINGLE — a standalone product with no variants.\n\n" +
+        "When displaying results: show GROUP products first with their VARIANT children listed beneath them. " +
+        "SINGLE products stand alone. Never show VARIANTs at the top level.\n\n" +
+        "Full attribute values are included — surface them when the user asks for details on a specific product. " +
+        "Pass categoryName (the human-readable name from list_catalogs) so it appears in the response summary.",
       inputSchema: {
         categoryId: z.string().describe("The category ID to fetch products from"),
-        categoryName: z.string().optional().describe("Human-readable category name (for display)"),
+        categoryName: z
+          .string()
+          .optional()
+          .describe(
+            "Human-readable catalog name from list_catalogs — included in the response summary for context"
+          ),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(MAX_PRODUCT_LIMIT)
+          .optional()
+          .describe(
+            `Products per page (default ${DEFAULT_PRODUCT_LIMIT}, max ${MAX_PRODUCT_LIMIT}). ` +
+            "If hasMore is true in the response, call again with page incremented by 1."
+          ),
+        page: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe("Page number to fetch, 1-indexed (default 1)."),
       },
     },
-    async ({ categoryId, categoryName }) => {
+    async ({ categoryId, categoryName, limit, page }) => {
+      const effectiveLimit = limit ?? DEFAULT_PRODUCT_LIMIT;
+      const effectivePage = page ?? DEFAULT_PAGE;
+
+      // Bluestone PAPI pagination: itemsOnPage and pageNo are doubles, pageNo is 0-indexed.
+      // The tool exposes 1-indexed pages to the model; we subtract 1 here.
       const data = await papiGet<ProductsResponse>(
-        `/categories/${categoryId}/products?subCategories=true`,
+        `/categories/${categoryId}/products?subCategories=true&itemsOnPage=${effectiveLimit}&pageNo=${effectivePage - 1}`,
         creds
       );
-      const products = data.results.map((p) => {
-        const attrs = p.attributes
-          .filter((a) => a.values.length > 0 || (a.dictionary && a.dictionary.length > 0))
-          .map((a) => ({
-            group: a.groupName,
-            name: a.name,
-            value: formatAttributeValue(a),
-            ...(a.definingAttribute && { definingAttribute: true }),
-          }));
-        return {
-          name: p.name,
-          number: p.number,
-          type: p.type,
-          id: p.id,
-          lastUpdated: new Date(p.lastUpdate).toISOString(),
-          ...(p.variantParentId && { variantOf: p.variantParentId }),
-          ...(p.variants.length > 0 && { variantIds: p.variants }),
-          ...(p.media.length > 0 && {
-            media: p.media.map((m) => ({
-              label: m.labels[0] ?? "Media",
-              fileName: m.fileName,
-              type: m.contentType,
-            })),
-          }),
-          attributes: attrs,
-        };
-      });
+
+      // Separate products by type
+      const groupMap = new Map<string, ReturnType<typeof mapProduct> & { variants: ReturnType<typeof mapProduct>[] }>();
+      const singles: ReturnType<typeof mapProduct>[] = [];
+      const variantsByParent = new Map<string, Product[]>();
+
+      for (const p of data.results) {
+        if (p.type === "VARIANT" && p.variantParentId) {
+          const list = variantsByParent.get(p.variantParentId) ?? [];
+          list.push(p);
+          variantsByParent.set(p.variantParentId, list);
+        } else if (p.type === "GROUP") {
+          groupMap.set(p.id, { ...mapProduct(p), variants: [] });
+        } else {
+          singles.push(mapProduct(p));
+        }
+      }
+
+      // Attach variants to their parent groups.
+      // Variants whose GROUP is on a different page are included as standalone items
+      // (the type field tells the model how to display them).
+      const orphanVariants: ReturnType<typeof mapProduct>[] = [];
+      for (const [parentId, variants] of variantsByParent) {
+        const group = groupMap.get(parentId);
+        if (group) {
+          group.variants = variants.map(mapProduct);
+        } else {
+          orphanVariants.push(...variants.map(mapProduct));
+        }
+      }
+
+      const products = [
+        ...Array.from(groupMap.values()),
+        ...singles,
+        ...orphanVariants,
+      ];
+
+      const showing = data.results.length;
+      const totalPages = Math.ceil(data.totalCount / effectiveLimit);
+      const hasMore = effectivePage < totalPages;
+      const label = categoryName ?? categoryId;
+
       return {
         content: [
           {
             type: "text" as const,
-            text: betaPrefix() + JSON.stringify(
-              { category: categoryName ?? categoryId, totalCount: data.totalCount, products },
-              null,
-              2
-            ),
+            text:
+              `Found ${data.totalCount} product${data.totalCount === 1 ? "" : "s"} in "${label}"` +
+              (hasMore
+                ? `, showing page ${effectivePage} of ${totalPages}. ` +
+                  `Call again with page=${effectivePage + 1} to fetch more.`
+                : `.`) +
+              "\n\n" +
+              JSON.stringify(
+                {
+                  catalog: label,
+                  totalCount: data.totalCount,
+                  page: effectivePage,
+                  totalPages,
+                  returned: showing,
+                  hasMore,
+                  products,
+                },
+                null,
+                2
+              ),
           },
         ],
       };
@@ -337,11 +426,10 @@ export function createMcpServer(creds: Credentials): McpServer {
     {
       description:
         "Create a new product in Bluestone PIM. " +
-        "IMPORTANT: Call session_init first if this is the first tool call in the conversation. " +
         "The product name is required — always confirm the name with the user before calling this tool. " +
-        "Returns the ID of the newly created product.",
+        "Returns the name and ID of the newly created product.",
       inputSchema: {
-        name: z.string().min(1).describe("The product name — must be provided by the user"),
+        name: z.string().min(1).describe("The product name — must be confirmed by the user before calling"),
       },
     },
     async ({ name }) => {
@@ -353,11 +441,7 @@ export function createMcpServer(creds: Credentials): McpServer {
         content: [
           {
             type: "text" as const,
-            text: betaPrefix() + JSON.stringify(
-              { success: true, message: `Product "${name}" created successfully.`, id: resourceId },
-              null,
-              2
-            ),
+            text: `Product "${name}" created successfully. ID: ${resourceId}`,
           },
         ],
       };

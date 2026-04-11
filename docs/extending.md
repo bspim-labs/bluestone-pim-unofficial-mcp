@@ -2,6 +2,8 @@
 
 All tools live in `src/tools.ts` inside the `createMcpServer()` factory function. This file is shared by both the local STDIO entry point (`src/index.ts`) and the Vercel handler (`api/mcp.ts`).
 
+Before writing a new tool, read [mcp-patterns.md](mcp-patterns.md) for the required description, response format, and error handling rules. The skeletons below are the minimal starting point — the patterns doc explains what goes in each field and why.
+
 ---
 
 ## Adding a new read tool (PAPI)
@@ -12,19 +14,23 @@ Copy this skeleton into `src/tools.ts` inside `createMcpServer`, before the `ret
 server.registerTool(
   "your_tool_name",
   {
-    description: "What this tool does and when Claude should use it.",
+    description:
+      "What this tool does and when to call it. " +
+      "Mention which other tool to call first if an ID is needed. " +
+      "State what to suppress unless the user specifically asks.",
     inputSchema: {
-      someParam: z.string().describe("What this parameter is for"),
+      someId: z.string().describe("The ID — get this from your_other_tool"),
     },
   },
-  async ({ someParam }) => {
-    const data = await papiGet<YourResponseType>(`/your-endpoint/${someParam}`, creds);
+  async ({ someId }) => {
+    const data = await papiGet<YourResponseType>(`/your-endpoint/${someId}`, creds);
 
     return {
       content: [
         {
           type: "text" as const,
-          text: JSON.stringify(data, null, 2),
+          // Lead with a plain-text summary, then JSON. See mcp-patterns.md.
+          text: `Found ${data.totalCount} items.\n\n` + JSON.stringify(data, null, 2),
         },
       ],
     };
@@ -71,7 +77,7 @@ async function mapiPatch(path: string, body: unknown, creds: Credentials): Promi
   });
   if (!res.ok) {
     const responseText = await res.text();
-    throw new Error(`Bluestone MAPI error ${res.status}: ${responseText || res.statusText}`);
+    throw new Error(mapiErrorMessage(res.status, responseText));
   }
 }
 ```
