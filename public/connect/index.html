@@ -4,6 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Bluestone PIM · AI Connect</title>
+  <meta name="description" content="Connect Claude Desktop, Cursor, or ChatGPT to your Bluestone PIM organisation via MCP. An unofficial, open-source integration built as a reference implementation.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Bluestone PIM · AI Connect">
+  <meta property="og:description" content="Connect Claude Desktop, Cursor, or ChatGPT to your Bluestone PIM organisation via MCP. An unofficial, open-source integration built as a reference implementation.">
+  <meta property="og:image" content="https://bluestone-mcp-inofficial.vercel.app/bluestone_pim_logo.png">
+  <meta property="og:url" content="https://bluestone-mcp-inofficial.vercel.app/connect">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Bluestone PIM · AI Connect">
+  <meta name="twitter:description" content="Connect Claude Desktop, Cursor, or ChatGPT to your Bluestone PIM organisation via MCP.">
+  <meta name="twitter:image" content="https://bluestone-mcp-inofficial.vercel.app/bluestone_pim_logo.png">
+  <link rel="icon" type="image/png" href="/bluestone_pim_logo.png">
   <!-- Prevent flash of wrong theme before page renders -->
   <script>
     (function () {
@@ -24,14 +35,17 @@
       .nav-link.active { color: #60a5fa; }
     }
     h2[id], h3[id] { scroll-margin-top: 8rem; }
+    h2 .anchor-link, h3 .anchor-link { opacity: 0; transition: opacity 0.15s; }
+    h2:hover .anchor-link, h3:hover .anchor-link { opacity: 1; }
     @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
     .status-checking { animation: pulse-dot 1.2s ease-in-out infinite; }
   </style>
 </head>
 <body class="bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased">
 
-  <!-- Header -->
-  <header class="sticky top-0 z-20 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700/60">
+  <!-- Sticky top block: header + mobile nav -->
+  <div class="sticky top-0 z-20">
+  <header class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700/60">
     <div class="max-w-5xl mx-auto px-6 py-4 flex items-center gap-3">
       <img src="/bluestone_pim_logo.png" alt="Bluestone PIM" class="h-8 w-auto object-contain shrink-0">
       <div class="flex-1 min-w-0">
@@ -65,6 +79,21 @@
     </div>
   </header>
 
+  <!-- Mobile nav -->
+  <nav id="mobile-nav" class="md:hidden bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 px-6 overflow-x-auto">
+    <div class="flex gap-5 py-3 text-sm whitespace-nowrap">
+      <a href="#what-can-it-do" class="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">What can it do?</a>
+      <a href="#before-you-start" class="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Before you start</a>
+      <a href="#claude-desktop" class="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"><img src="/brand_assets/claude_logo.png" alt="" class="w-4 h-4 object-contain rounded shrink-0">Claude Desktop</a>
+      <a href="#cursor" class="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"><img src="/brand_assets/cursor_logo.png" alt="" class="w-4 h-4 object-contain rounded shrink-0">Cursor</a>
+      <a href="#chatgpt" class="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"><img src="/brand_assets/chatgpt_logo.png" alt="" class="w-4 h-4 object-contain rounded shrink-0 bg-white p-px">ChatGPT</a>
+      <a href="#other-clients" class="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Other clients</a>
+      <a href="#troubleshooting" class="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Troubleshooting</a>
+    </div>
+  </nav>
+
+  </div><!-- end sticky top block -->
+
   <!-- Disclaimer banner -->
   <div class="bg-slate-100 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700/60">
     <div class="max-w-5xl mx-auto px-6 py-3">
@@ -73,18 +102,6 @@
       </p>
     </div>
   </div>
-
-  <!-- Mobile nav -->
-  <nav class="md:hidden sticky top-[109px] z-10 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 px-6 overflow-x-auto">
-    <div class="flex gap-5 py-3 text-sm whitespace-nowrap">
-      <a href="#what-can-it-do" class="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">What can it do?</a>
-      <a href="#before-you-start" class="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Before you start</a>
-      <a href="#claude-desktop" class="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Claude Desktop</a>
-      <a href="#cursor" class="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Cursor</a>
-      <a href="#chatgpt" class="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">ChatGPT</a>
-      <a href="#troubleshooting" class="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Troubleshooting</a>
-    </div>
-  </nav>
 
   <!-- Layout -->
   <div class="max-w-5xl mx-auto px-6 py-10 flex gap-12">
@@ -99,6 +116,7 @@
           <a href="#claude-desktop" class="nav-link flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 py-1.5 transition-colors"><img src="/brand_assets/claude_logo.png" alt="" class="w-4 h-4 object-contain rounded shrink-0">Claude Desktop</a>
           <a href="#cursor" class="nav-link flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 py-1.5 transition-colors"><img src="/brand_assets/cursor_logo.png" alt="" class="w-4 h-4 object-contain rounded shrink-0">Cursor</a>
           <a href="#chatgpt" class="nav-link flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 py-1.5 transition-colors"><img src="/brand_assets/chatgpt_logo.png" alt="" class="w-4 h-4 object-contain rounded shrink-0 bg-white p-px">ChatGPT</a>
+          <a href="#other-clients" class="nav-link block text-sm text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 py-1.5 transition-colors">Other clients</a>
           <a href="#troubleshooting" class="nav-link block text-sm text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 py-1.5 transition-colors">Troubleshooting</a>
         </div>
       </nav>
@@ -258,42 +276,63 @@ Open a chat and ask:
 
 ## ChatGPT
 
-### Step 1: Open the Apps panel
+> **Note:** As of now, custom MCP servers can only be added from the ChatGPT web app at chatgpt.com — not from the desktop client. Once added, the connector will be available in the desktop client as well.
 
-In ChatGPT, click the grid icon (**Apps**) in the left sidebar, or go to **Settings -> Connected apps**. Click **Add app** or search for how to add a custom MCP server.
+### Step 1: Open Settings
 
-[screenshot: ChatGPT — Apps panel or Settings showing Add app option]
+In the ChatGPT web app, click your profile in the bottom-left corner and choose **Settings**.
 
-### Step 2: Fill in the server details
+[screenshot: chatgpt_overview.webp]
+
+### Step 2: Enable Developer mode
+
+Navigate to **Apps** in the left sidebar, then click **Advanced settings**. Enable **Developer mode** and click **Create app**.
+
+[screenshot: chatgpt_apps.webp]
+
+[screenshot: chatgpt_dev.webp]
+
+### Step 3: Fill in the app details
+
+Fill in the New App form:
 
 - **Name**: `Bluestone PIM`
-- **Description**: `Connects to your Bluestone PIM organisation` (optional)
+- **Description**: `Unofficial MCP server for Bluestone PIM` (optional)
 - **MCP Server URL**: [server-url]
 - **Authentication**: `OAuth`
 
-[screenshot: ChatGPT — Add MCP server form with fields filled in]
+Check the **I understand and want to continue** checkbox and click **Create**.
 
-### Step 3: Check Advanced settings
+[screenshot: chatgpt_mcp_settings.webp]
 
-Expand **Advanced settings**. ChatGPT will auto-discover the server configuration. Leave everything as-is:
+### Step 4: Connect
 
-- **Registration method**: Dynamic Client Registration (DCR), already selected
-- **Scopes**: leave blank
-- **OIDC**: leave disabled
+A browser window opens showing the **Connect to Bluestone PIM** form. Fill in your credentials and click **Authorise**.
 
-[screenshot: ChatGPT — Advanced settings showing auto-discovered OAuth endpoints]
+[screenshot: browser_auth.webp]
 
-### Step 4: Save and authorise
+You are now connected. ChatGPT shows a "Bluestone PIM is now connected" confirmation and lists its available tools.
 
-Click **Save**. A browser window opens showing the **Connect to Bluestone PIM** form. Fill in all three credentials and click **Authorise**.
-
-[screenshot: Connect to Bluestone PIM — browser form with all three fields]
+[screenshot: chatgpt_connected.webp]
 
 ### Try it
 
-Start a new chat and type:
+Open a chat and ask:
 
 [prompt: Show me the catalogs in Bluestone PIM]
+
+---
+
+## Other clients
+
+Any MCP client that supports remote HTTP servers and OAuth should work. The following have not been tested directly but are expected to connect without issues:
+
+- Claude.ai (web)
+- VS Code + GitHub Copilot
+- Windsurf
+- Zed
+
+If you try one of these and it works (or doesn't), feel free to report it on [GitHub](https://github.com/leafleaf90/bluestone-pim-unofficial-mcp/issues) so others can benefit.
 
 ---
 
@@ -399,6 +438,13 @@ Still stuck? [Open an issue on GitHub](https://github.com/leafleaf90/bluestone-p
     const parsedHtml = marked.parse(processed).replace(new RegExp(PLACEHOLDER, 'g'), serverUrlHtml);
     document.getElementById('content').innerHTML = parsedHtml;
 
+    // Generate heading IDs — marked v11 does not auto-generate them
+    document.querySelectorAll('#content h2, #content h3').forEach(function(h) {
+      var slug = h.textContent.trim().toLowerCase()
+        .replace(/[^\w\s]/g, '').trim().replace(/\s+/g, '-');
+      if (slug) h.id = slug;
+    });
+
     // Client icons on h2 headings
     var clientImages = {
       'Claude Desktop': { src: '/brand_assets/claude_logo.png', extra: '' },
@@ -415,6 +461,19 @@ Still stuck? [Open an issue on GitHub](https://github.com/leafleaf90/bluestone-p
       img.alt = text + ' logo';
       img.className = 'not-prose inline-block w-6 h-6 rounded-md mr-2 shrink-0 align-middle mb-0.5 object-contain ' + icon.extra;
       h2.prepend(img);
+    });
+
+    // Last updated date
+    document.getElementById('last-updated').textContent = 'April 2026';
+
+    // Anchor links on h2/h3 headings
+    document.querySelectorAll('#content h2[id], #content h3[id]').forEach(function(h) {
+      var anchor = document.createElement('a');
+      anchor.href = '#' + h.id;
+      anchor.className = 'anchor-link ml-2 text-slate-300 dark:text-slate-600 hover:text-slate-400 dark:hover:text-slate-400 text-base font-normal no-underline';
+      anchor.setAttribute('aria-hidden', 'true');
+      anchor.textContent = '#';
+      h.appendChild(anchor);
     });
 
     // Sidebar active link tracking
@@ -443,8 +502,8 @@ Still stuck? [Open an issue on GitHub](https://github.com/leafleaf90/bluestone-p
 
   <!-- Footer -->
   <footer class="mt-16 border-t border-slate-200 dark:border-slate-700/60">
-    <div class="max-w-5xl mx-auto px-6 py-6 flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
-      <span>Personal project. Not an official Bluestone PIM product.</span>
+    <div class="max-w-5xl mx-auto px-6 py-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-xs text-slate-400 dark:text-slate-500">
+      <span>Personal project. Not an official Bluestone PIM product. Last updated <time id="last-updated"></time>.</span>
       <span class="flex items-center gap-3">
         <span>Built by</span>
         <a href="https://www.linkedin.com/in/viktorlovgren/" target="_blank" rel="noopener noreferrer"
