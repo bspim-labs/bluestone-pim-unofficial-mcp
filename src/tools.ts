@@ -254,7 +254,7 @@ export function createMcpServer(creds: Credentials): McpServer {
   const server = new McpServer(
     {
       name: "bluestone-pim",
-      version: "1.0.0",
+      version: "1.1.0",
     },
     {
       instructions:
@@ -329,8 +329,9 @@ export function createMcpServer(creds: Credentials): McpServer {
       description:
         "List all catalogs in the Bluestone PIM organisation, including their full category node tree. " +
         "Returns working state data, including unpublished changes. " +
-        "Each catalog includes its nested category tree with node IDs. " +
-        "Use node IDs from the tree to call list_products_in_category. " +
+        "Each catalog includes its nested category tree. " +
+        "To list products in a category, use the id field from a node inside the nodes tree — " +
+        "NOT the top-level catalog id. The catalog id is the root container; the browsable categories are its children nodes. " +
         "Call this first before browsing products.",
       inputSchema: {
         context: z
