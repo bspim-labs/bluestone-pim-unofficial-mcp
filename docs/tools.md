@@ -41,13 +41,11 @@ Header: x-api-key
 ```
 Here are the 7 categories in your Bluestone PIM:
 
-1. Products — 69970cf452d7b36ee509a5f1
-2. Channels — 6970581df08a12eba9d77077
-3. ______________ — 69a7c6fb10e99d3efd412304
-4. Archived Products — 69a6853c10e99d3efd411604
-5. DPP — 69a688f054b2bc35386dae68
-6. ______________ — 69a7c7042e4cc6df07cdee54
-7. Supplier Data Onboarding — 69a7c70c2e4cc6df07cdee55
+1. Products — aaa000000000000000000001
+2. Channels — aaa000000000000000000002
+3. Archived Products — aaa000000000000000000003
+4. DPP — aaa000000000000000000004
+5. Supplier Data Onboarding — aaa000000000000000000005
 
 Which category would you like to see products from?
 ```
@@ -94,8 +92,8 @@ The tool returns the full product data including all attribute values. Claude us
 - "What products are in DPP?"
 
 **Example follow-up prompts that Claude answers from the already-fetched data (no second tool call needed):**
-- "Show me the details for ALTOSONIC V12"
-- "What are the dimensions of OE125CQQ CL-900-3000 SS?"
+- "Show me the details for Example Product Name"
+- "What are the dimensions of Example Variant Name?"
 - "Which of these are GROUP products?"
 
 ---
@@ -125,7 +123,7 @@ Authentication is handled automatically — the server fetches a Bearer token fr
 
 **Example prompts that trigger this tool:**
 - "Create a product called Test Widget"
-- "Add a new product named OPTISONIC 5000"
+- "Add a new product named Example Product"
 - "Create a new product"  ← Claude will ask for the name before proceeding
 
 ---

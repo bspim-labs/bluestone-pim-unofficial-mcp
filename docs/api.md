@@ -35,10 +35,10 @@ Response shape:
   "totalCount": 7,
   "results": [
     {
-      "id": "69970cf452d7b36ee509a5f1",
+      "id": "aaa000000000000000000001",
       "order": 0,
       "name": "Products",
-      "number": "69970cf452d7b36ee509a5f1",
+      "number": "aaa000000000000000000001",
       "description": "",
       "attributes": [...],
       "categoryAttributes": [...]
@@ -63,7 +63,7 @@ GET /v1/categories/{categoryId}/products?subCategories=true
 
 ```bash
 curl --request GET \
-     --url 'https://api.test.bluestonepim.com/v1/categories/69970cf452d7b36ee509a5f1/products?subCategories=true' \
+     --url 'https://api.test.bluestonepim.com/v1/categories/aaa000000000000000000001/products?subCategories=true' \
      --header 'accept: application/json' \
      --header 'x-api-key: YOUR_KEY'
 ```
@@ -77,10 +77,10 @@ Response shape:
   "totalCount": 13,
   "results": [
     {
-      "id": "69c23f4bf9025d5844a6b6eb",
+      "id": "bbb000000000000000000001",
       "type": "GROUP",
-      "name": "Cable ladder OE125 3m",
-      "number": "69c23f4bf9025d5844a6b6eb",
+      "name": "Example Product Name",
+      "number": "bbb000000000000000000001",
       "lastUpdate": 1774341927942,
       "createDate": 1774337867081,
       "attributes": [
@@ -149,7 +149,7 @@ curl -s \
 
 # List products in "Products" category
 curl -s \
-  --url 'https://api.test.bluestonepim.com/v1/categories/69970cf452d7b36ee509a5f1/products?subCategories=true' \
+  --url 'https://api.test.bluestonepim.com/v1/categories/aaa000000000000000000001/products?subCategories=true' \
   --header 'accept: application/json' \
   --header 'x-api-key: your-papi-key-here' \
   | python3 -m json.tool
