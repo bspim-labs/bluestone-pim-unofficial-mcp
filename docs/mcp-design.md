@@ -110,18 +110,22 @@ In Claude Desktop, `image` content blocks returned by a tool appear inside the t
 
 This is a Claude Desktop rendering decision, not something the server controls. The image content block is correct per the MCP spec; it is just not surfaced in the main chat thread.
 
-**What was tried first:** Adding an instruction to the `get_product_image` tool description telling Claude to direct the user to expand the step. This did not work reliably. Description-level instructions are read at startup; by the time Claude is composing its reply after the tool call, the description is no longer in active focus and gets ignored.
+**What was tried first:** Adding an instruction to the `get_product_image` tool description telling Claude to direct the user to expand the step. This did not work. Description-level instructions are read at startup; by the time Claude is composing its reply after the tool call, the description is no longer in active focus.
 
-**Mitigation that works:** The `text` content block returned by the tool now carries the instruction directly, along with the original image URL:
+**What was tried second:** Embedding the instruction in the tool result text. This also failed. The model is multimodal: it can see the image content block directly in its context. It describes what it sees ("a classic forest green crew neck tee") and ignores the instruction to tell the user where to find it, because from the model's perspective it already showed the image. It does not understand that what it sees is not what the user sees.
+
+**The root cause:** The model does not understand the visibility gap. It sees the image; it assumes the user does too.
+
+**Mitigation applied:** The tool result text now explicitly names the gap:
 
 ```
-Image fetched: T-shirt - Green.
-In Claude Desktop the image appears inside the tool result panel, not inline in the chat.
-Tell the user: "The image is in the tool result above. Click 'Get product image' to expand it.
-Or open it directly: https://media.test.bluestonepim.com/..."
+IMPORTANT: You can see this image in your context window, but the user cannot see it inline in the chat.
+The image is hidden inside a collapsed tool result panel that the user has to manually expand.
+Do not say "there it is" or imply the image is visible to them.
+Instead, tell the user they can open the image directly at this URL: https://media.test.bluestonepim.com/...
 ```
 
-The tool result is in active context at the exact moment Claude is composing its reply, so this instruction is reliably followed. Claude tells the user where to find the image and provides a direct URL as a fallback.
+Banning "there it is" by name and framing the problem as a visibility gap the model is unaware of is more likely to override the model's default behavior than a generic instruction to "tell the user where to find it".
 
 ---
 

@@ -395,7 +395,7 @@ export function createMcpServer(creds: Credentials): McpServer {
         "Returns working state data, including unpublished changes. " +
         "Use the catalog id directly as the nodeId when calling list_products_in_category. " +
         "Call this first before browsing products. " +
-        "Do not attempt to fetch catalog data via HTTP, bash, or code — use this tool directly.",
+        "Do not attempt to fetch catalog data via HTTP, bash, or code. Use this tool directly.",
       inputSchema: {
         context: z
           .string()
@@ -458,7 +458,7 @@ export function createMcpServer(creds: Credentials): McpServer {
           .string()
           .optional()
           .describe(
-            "Human-readable catalog name from list_catalogs — included in the response summary for context."
+            "Human-readable catalog name from list_catalogs. Included in the response summary for context."
           ),
         limit: z
           .number()
@@ -605,7 +605,7 @@ export function createMcpServer(creds: Credentials): McpServer {
     {
       description:
         "List published (live) catalogs in the Bluestone PIM organisation. " +
-        "Returns only data that has been synced/published — does not include unpublished changes. " +
+        "Returns only data that has been synced/published. Does not include unpublished changes. " +
         "Use list_catalogs instead when the user is working on enrichment or wants to see current working state. " +
         "Returns category IDs for use with list_published_products_in_category.",
       inputSchema: {},
@@ -638,12 +638,12 @@ export function createMcpServer(creds: Credentials): McpServer {
     {
       description:
         "List published (live) products in a Bluestone PIM category. " +
-        "Returns only data that has been synced/published — does not include unpublished changes. " +
+        "Returns only data that has been synced/published. Does not include unpublished changes. " +
         "Use list_products_in_category instead when the user is working on enrichment or wants working state. " +
         "Call list_published_catalogs first to get valid category IDs.\n\n" +
         "Product types in the response: GROUP (parent with variants), VARIANT (child of a GROUP), SINGLE (standalone). " +
         "Each product includes an imageUrl (preview) when a media asset is present. " +
-        "When the user asks to see a product image, call get_product_image with that imageUrl — do not search the web. " +
+        "When the user asks to see a product image, call get_product_image with that imageUrl. Do not search the web. " +
         "If the requested catalog is not found in the published results, call list_catalogs to check whether it exists in working state, and inform the user it has not been published yet.",
       inputSchema: {
         categoryId: z
@@ -655,7 +655,7 @@ export function createMcpServer(creds: Credentials): McpServer {
           .string()
           .optional()
           .describe(
-            "Human-readable category name from list_published_catalogs — included in the response summary."
+            "Human-readable category name from list_published_catalogs. Included in the response summary."
           ),
         limit: z
           .number()
@@ -738,7 +738,7 @@ export function createMcpServer(creds: Credentials): McpServer {
         "Fetch and display a product image inline in chat. " +
         "Use the imageUrl returned by list_published_products_in_category. " +
         "Call this when the user asks to see a product image or wants a visual preview. " +
-        "Do not call this automatically for every product in a list — only when the user explicitly asks to see an image. " +
+        "Do not call this automatically for every product in a list. Only call it when the user explicitly asks to see an image. " +
         "Do not search the web for product images. Do not use the imageUrl as a markdown image link. Always call this tool. " +
         "The tool result will tell you exactly what to say to the user about where to find the image.",
       annotations: {
@@ -780,10 +780,11 @@ export function createMcpServer(creds: Credentials): McpServer {
           {
             type: "text" as const,
             text:
-              `Image fetched: ${name}.\n` +
-              `In Claude Desktop the image appears inside the tool result panel, not inline in the chat. ` +
-              `Tell the user: "The image is in the tool result above. Click 'Get product image' to expand it. ` +
-              `Or open it directly: ${imageUrl}"`,
+              `Image fetched: ${name}.\n\n` +
+              `IMPORTANT: You can see this image in your context window, but the user cannot see it inline in the chat. ` +
+              `The image is hidden inside a collapsed tool result panel that the user has to manually expand. ` +
+              `Do not say "there it is" or imply the image is visible to them. ` +
+              `Instead, tell the user they can open the image directly at this URL: ${imageUrl}`,
           },
           {
             type: "image" as const,
@@ -801,7 +802,7 @@ export function createMcpServer(creds: Credentials): McpServer {
     {
       description:
         "Create a new product in Bluestone PIM. " +
-        "The product name is required — always confirm the name with the user before calling this tool. " +
+        "The product name is required. Always confirm the name with the user before calling this tool. " +
         "Returns the name and ID of the newly created product. " +
         "If categoryId is provided, the product will also be assigned to that catalog category after creation. " +
         "After creating, tell the user the product was created and suggest they open Bluestone PIM to continue enriching it.",
@@ -809,7 +810,7 @@ export function createMcpServer(creds: Credentials): McpServer {
         name: z
           .string()
           .min(1)
-          .describe("The product name — must be confirmed by the user before calling."),
+          .describe("The product name. Must be confirmed by the user before calling."),
         categoryId: z
           .string()
           .optional()
