@@ -28,7 +28,7 @@ All MCP tools are registered inside a single `createMcpServer(creds: Credentials
 
 - `list_contexts` — calls MAPI Global Settings `/global-settings/context` via `mapiGet()`
 - `list_catalogs` — calls MAPI `/pim/catalogs` via `mapiGet()`. Returns catalog IDs used directly as nodeId in the next tool.
-- `list_products_in_category` — calls MAPI `/pim/catalogs/nodes/{id}/products` via `mapiGet()`. The `nodeId` param is the catalog ID from `list_catalogs` — the catalog itself is the root node.
+- `list_products_in_category` — three-step recursive listing. Steps 1+2 run in parallel: `POST /search/products/search?archiveState=ACTIVE` with `categoryFilters: [{categoryId, type: "IN_ANY_CHILD"}]` returns `{ data: [{id: string}] }` (objects, not strings — no total field); `POST /search/products/count` with the same filter body returns `{ count: int }` for the accurate total. Step 3: `POST /pim/products/list/views/by-ids?archiveState=ACTIVE` with `views: [{type: "METADATA"}]` resolves IDs to product data. Name is context-keyed (`metadata.name.value[context]`), not a plain string. Also returns `type` and `state` from metadata. Note: the UI uses `POST /pim/products/list/by-ids` (simpler flat response) but that endpoint is not in the official PIM spec — we use `list/views/by-ids` instead.
 - `list_published_catalogs` — calls PAPI `/categories` via `papiGet()` (published/live data only)
 - `list_published_products_in_category` — calls PAPI `/categories/{id}/products` via `papiGet()` (published/live data only)
 - `create_product` — calls MAPI `/pim/products` via `mapiPost()`
@@ -44,7 +44,7 @@ Three MAPI API families share the same Bearer token and base domain (`api.test.b
 
 Two auth methods:
 - **PAPI** (`papiGet`): `x-api-key` header (static). Pagination: `itemsOnPage` + `pageNo` (0-indexed doubles).
-- **MAPI** (`mapiGet`, `mapiPost`): `Authorization: Bearer` via OAuth 2.0 client credentials (`getBearerToken()`). Tokens are cached in memory per `mapiClientId` and refreshed 60s before expiry. Pagination: `page` + `pageSize` (0-indexed).
+- **MAPI** (`mapiGet`, `mapiPost`, `mapiPostBody`): `Authorization: Bearer` via OAuth 2.0 client credentials (`getBearerToken()`). Tokens are cached in memory per `mapiClientId` and refreshed 60s before expiry. Pagination: `page` + `pageSize` (0-indexed). `mapiPostBody` is for POST requests that return a JSON body (reads); `mapiPost` is for mutations that return a `resource-id` header. Both `mapiGet` and `mapiPostBody` send `context-fallback: true` on every request so the API returns fallback-language data instead of nulls when a translation is missing.
 
 Both APIs expose 1-indexed `page` to the model — subtract 1 internally before passing to either API.
 
@@ -71,9 +71,10 @@ Vercel routing is in `vercel.json` — all OAuth and MCP paths rewrite to `/api/
 ### Adding new tools
 
 Register inside `createMcpServer()` in `src/tools.ts`:
-- Working state reads: `mapiGet<T>(url, creds, { context? })` — use `MAPI_PIM_BASE`, `MAPI_SEARCH_BASE`, or `MAPI_GLOBAL_SETTINGS_BASE` to construct the URL.
+- Working state reads (GET): `mapiGet<T>(url, creds, { context? })` — use `MAPI_PIM_BASE`, `MAPI_SEARCH_BASE`, or `MAPI_GLOBAL_SETTINGS_BASE` to construct the full URL.
+- Working state reads (POST, e.g. search or by-ids): `mapiPostBody<T>(url, body, creds, { context? })` — same URL construction, returns the response body directly.
 - Published reads: `papiGet<T>(path, creds)` — only for `list_published_*` tools.
-- Writes: `mapiPost<T>(path, body, creds)`. For PATCH/PUT/DELETE, add a helper following the `mapiPost` pattern.
+- Mutations: `mapiPost<T>(path, body, creds)` — returns `{ data, resourceId }` where `resourceId` is from the `resource-id` response header. For PATCH/PUT/DELETE, add a helper following the `mapiPost` pattern.
 
 Before adding a tool, read **`docs/mcp-patterns.md`** — it defines the required checklist for descriptions, response format, pagination, error handling, and annotations. See `docs/extending.md` for code skeletons.
 
@@ -93,4 +94,6 @@ Image paths must be **absolute** (`/connect/images/filename.webp`), not relative
 
 ### Copy style
 
-No em dashes anywhere — in the connect page, tool descriptions, error messages, or docs. Use a colon or comma instead. Em dashes read as AI-generated.
+No em dashes anywhere in the connect page, tool descriptions, error messages, or docs. Use a colon or comma instead. Em dashes read as AI-generated.
+
+Never use the contrast construction "X is not just Y — it is Z" or any variation of it ("not merely", "not simply", etc.). This pattern is strongly associated with AI-generated writing. Rewrite as a plain statement instead. For example: "A tool description is documentation that competes with everything else in the model's context window" rather than "A tool description is not just documentation — it is an instruction competing with everything else in the model's context window."

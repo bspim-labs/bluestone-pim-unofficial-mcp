@@ -83,13 +83,14 @@
   <nav id="mobile-nav" class="md:hidden bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700/60 px-6 overflow-x-auto">
     <div class="flex gap-5 py-3 text-sm whitespace-nowrap">
       <a href="#what-can-it-do" class="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">What can it do?</a>
-      <a href="#under-the-hood" class="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Under the hood</a>
       <a href="#before-you-start" class="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Before you start</a>
       <a href="#claude-desktop" class="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"><img src="/brand_assets/claude_logo.png" alt="" class="w-4 h-4 object-contain rounded shrink-0">Claude Desktop</a>
       <a href="#cursor" class="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"><img src="/brand_assets/cursor_logo.png" alt="" class="w-4 h-4 object-contain rounded shrink-0">Cursor</a>
       <a href="#chatgpt" class="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"><img src="/brand_assets/chatgpt_logo.png" alt="" class="w-4 h-4 object-contain rounded shrink-0 bg-white p-px">ChatGPT</a>
       <a href="#other-clients" class="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Other clients</a>
       <a href="#troubleshooting" class="text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Troubleshooting</a>
+      <span class="text-slate-300 dark:text-slate-600">·</span>
+      <a href="#for-the-curious" class="text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors italic">For the curious</a>
     </div>
   </nav>
 
@@ -113,13 +114,16 @@
         <p class="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4">Contents</p>
         <div class="space-y-0.5">
           <a href="#what-can-it-do" class="nav-link block text-sm text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 py-1.5 transition-colors">What can it do?</a>
-          <a href="#under-the-hood" class="nav-link block text-sm text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 py-1.5 transition-colors">Under the hood</a>
           <a href="#before-you-start" class="nav-link block text-sm text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 py-1.5 transition-colors">Before you start</a>
           <a href="#claude-desktop" class="nav-link flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 py-1.5 transition-colors"><img src="/brand_assets/claude_logo.png" alt="" class="w-4 h-4 object-contain rounded shrink-0">Claude Desktop</a>
           <a href="#cursor" class="nav-link flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 py-1.5 transition-colors"><img src="/brand_assets/cursor_logo.png" alt="" class="w-4 h-4 object-contain rounded shrink-0">Cursor</a>
           <a href="#chatgpt" class="nav-link flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 py-1.5 transition-colors"><img src="/brand_assets/chatgpt_logo.png" alt="" class="w-4 h-4 object-contain rounded shrink-0 bg-white p-px">ChatGPT</a>
           <a href="#other-clients" class="nav-link block text-sm text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 py-1.5 transition-colors">Other clients</a>
           <a href="#troubleshooting" class="nav-link block text-sm text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 py-1.5 transition-colors">Troubleshooting</a>
+          <p class="text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest pt-5 pb-1">For the curious</p>
+          <a href="#for-the-curious" class="nav-link block text-sm text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 py-1.5 transition-colors">Under the hood</a>
+          <a href="#design-notes" class="nav-link block text-sm text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 py-1.5 transition-colors">Design notes</a>
+          <a href="#on-designing-for-language-models" class="nav-link block text-sm text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 py-1.5 transition-colors">On designing for AI</a>
         </div>
       </nav>
     </aside>
@@ -154,40 +158,18 @@ Connect your AI assistant directly to your Bluestone PIM organisation. Once conn
 
 ## What can it do?
 
-Almost nothing, if we are being honest. A handful of example tools, but the point is the foundation: a working OAuth token broker and MCP server for Bluestone PIM that you can fork and build on.
+Almost nothing, if I am being honest. A handful of tools, but the point is the foundation: a working OAuth token broker and MCP server for Bluestone PIM that you can fork and build on.
 
 **What works today:**
 
-- **Browse your catalogs**: ask the AI to list all categories in your organisation, including the full category tree
-- **Explore products**: list all products in a category node. When you ask for products, you see your current working data, including changes your team has made today that have not been published yet. Ask specifically for "published products" if you want to see only what is live.
+- **Browse your catalogs**: ask the AI to list all categories in your organisation
+- **Explore products**: list all products in a catalog, including sub-categories. You see working data: changes your team has made today that have not been published yet. Ask specifically for "published products" if you want to see only what is live.
 - **Switch language**: ask to see data in a specific language and the AI finds the right context
 - **Create a product**: create a new product by name (the server instructs the AI to confirm the name before calling the tool, though this depends on the client)
 
-**What to expect for now:** Browsing and creating work. Product attribute detail and editing are not yet supported — if you ask the AI to show attributes on a specific product, or to update a field, it will tell you it cannot. For that kind of work, Bluestone PIM's own interface is still the right place. This is a foundation to build on, not a replacement.
+**What to expect for now:** Browsing and creating work. Product attribute detail and editing are not yet supported. If you ask the AI to show attributes on a specific product, or to update a field, it will tell you it cannot. This is a foundation to build on, not a replacement for the Bluestone PIM interface.
 
-This project is not intended to compete with or replace an official Bluestone PIM MCP integration. It is an independent experiment, a proof of concept exploring what becomes possible when Bluestone PIM is made accessible to AI assistants. We hope it demonstrates the value of that connection and serves as a useful reference point for anyone building towards an official solution.
-
----
-
-## Under the hood
-
-It's a small server. But it tries to be a well-behaved one.
-
-A few principles guided the design:
-
-- **Tools serve models, not developers.** Descriptions and error messages are written for a language model to read and act on — not for a developer to debug.
-- **Lead with summaries, not raw data.** Every response starts with a plain-text sentence before any JSON. Models are less likely to paste raw data into chat when the key facts are already stated.
-- **Fail with user-actionable messages.** "Authentication failed — your API key may be invalid" is more useful than a status code.
-- **Guide the model, not just the user.** Tool descriptions tell the model when to call a tool, what to suppress unless asked, and how to display hierarchical data.
-
-A few concrete decisions that followed from those principles:
-
-- **No database.** Session state is AES-256-GCM encrypted into the bearer token itself. The server has no persistent storage — and no credentials to steal.
-- **The beta notice is delivered via server instructions**, sent during the MCP handshake before any tools are called. This is the correct channel for server-level context — not a tool the model must remember to call first.
-- **Working state by default, published on request.** Bluestone PIM has two data layers: working state (what your team is enriching right now, including unpublished drafts) and published (what has been synced and is live). The default read tools return working state from the management API, because that is what enrichment teams actually need to work with. Separate tools are available when you specifically ask for published data.
-- **Language switching without server state.** The server exposes a context parameter on read tools corresponding to Bluestone's language and market settings. When you ask for data in a specific language, the AI looks up the right context ID and passes it on subsequent calls — no session is needed on the server side. The model tracks the active language for the conversation naturally.
-
-If you are building on top of this or forking it, the [patterns and design docs](https://github.com/leafleaf90/bluestone-pim-unofficial-mcp/tree/main/docs) in the repo go into more detail.
+This project is not intended to compete with or replace an official Bluestone PIM MCP integration. It is an independent experiment exploring what becomes possible when Bluestone PIM is made accessible to AI assistants. I hope it demonstrates the value of that connection and serves as a useful reference point for anyone building towards an official solution.
 
 ---
 
@@ -313,7 +295,7 @@ Open a chat and ask:
 
 ## ChatGPT
 
-> **Note:** As of now, custom MCP servers can only be added from the ChatGPT web app at chatgpt.com — not from the desktop client. Once added, the connector will be available in the desktop client as well.
+> **Note:** Custom MCP servers can only be added from the ChatGPT web app at chatgpt.com, not from the desktop client. Once added, the connector will be available in the desktop client as well.
 
 ### Step 1: Open Settings
 
@@ -325,7 +307,7 @@ In the ChatGPT web app, click your profile in the bottom-left corner and choose 
 
 Navigate to **Apps** in the left sidebar, then click **Advanced settings**. Enable **Developer mode** and click **Create app**.
 
-> **Note:** Developer mode is required for any unverified third-party MCP server — this is OpenAI's standard process, not specific to this integration. It disables ChatGPT's memory feature while active.
+> **Note:** Developer mode is required for any unverified third-party MCP server. This is OpenAI's standard process, not specific to this integration. It disables ChatGPT's memory feature while active.
 
 [screenshot: chatgpt_apps.webp]
 
@@ -399,7 +381,81 @@ Your MAPI credentials need write permissions. Read-only credentials work for bro
 **Tool returns an error about the API**
 Your credentials may point to the production Bluestone environment. This server currently connects to the **test environment** (`api.test.bluestonepim.com`) only.
 
-Still stuck? [Open an issue on GitHub](https://github.com/leafleaf90/bluestone-pim-unofficial-mcp/issues). We can't promise a fix, but we will read it.
+Still stuck? [Open an issue on GitHub](https://github.com/leafleaf90/bluestone-pim-unofficial-mcp/issues). I can't promise a fix, but I will read it.
+
+---
+
+## For the curious
+
+The sections below cover how the server is built, the decisions behind it, and what I am still working out. Nothing here is required reading. If you just connected successfully, you are done.
+
+## Under the hood
+
+It's a small server. But it tries to be a well-behaved one.
+
+A few principles guided the design:
+
+- **Tools serve models, not developers.** Descriptions and error messages are written for a language model to read and act on, not for a developer to debug.
+- **Lead with summaries, not raw data.** Every response starts with a plain-text sentence before any JSON. Models are less likely to paste raw data into chat when the key facts are already stated.
+- **Fail with user-actionable messages.** "Authentication failed: your API key may be invalid" is more useful than a status code.
+- **Guide the model, not just the user.** Tool descriptions tell the model when to call a tool, what to suppress unless asked, and how to behave with the data it receives.
+
+A few concrete decisions that followed from those principles:
+
+- **No database.** Session state is AES-256-GCM encrypted into the bearer token itself. The server has no persistent storage and no credentials to steal.
+- **The beta notice is delivered via server instructions**, sent during the MCP handshake before any tools are called. This is the correct channel for server-level context, not a tool the model must remember to call first.
+- **Working state by default, published on request.** Bluestone PIM has two data layers: working state (what your team is enriching right now, including unpublished drafts) and published (what has been synced and is live). The default read tools return working state from the management API, because that is what enrichment teams actually need to work with. Separate tools are available when you specifically ask for published data.
+- **Language switching without server state.** The server exposes a context parameter on read tools corresponding to Bluestone's language and market settings. When you ask for data in a specific language, the AI looks up the right context ID and passes it on subsequent calls. No session is needed on the server side. The model tracks the active language for the conversation naturally.
+
+If you are building on top of this or forking it, the [patterns and design docs](https://github.com/leafleaf90/bluestone-pim-unofficial-mcp/tree/main/docs) in the repo go into more detail.
+
+## Design notes
+
+Specific decisions, what I could not figure out, and what is still unsolved.
+
+### The two APIs
+
+Bluestone PIM has two API layers.
+
+**PAPI** (the published API) returns data that has been synced and is live. It is the appropriate source for storefronts and integrations that read final, approved data. It is documented and straightforward to use.
+
+**MAPI** (the management API) is what Bluestone PIM's own interface uses. It returns working state: changes your team has made today, attributes that have not been published yet, products that exist but are not live. For enrichment work, MAPI is the only API that reflects reality.
+
+The obvious choice is to default reads to MAPI. The complication is that MAPI is less formally documented than PAPI, and some of the behavior I rely on was found by inspecting network traffic from the Bluestone PIM UI rather than from a spec. I use it anyway, because using PAPI for enrichment workflows would mean the AI is looking at stale data. The default tools return working state. There are separate `list_published_*` tools if you specifically want the published layer.
+
+### How product browsing works
+
+An early version of product listing called the MAPI node-products endpoint directly. It worked, but only returned products assigned to the root catalog node. Products in sub-categories were silently missing.
+
+Fixing this required finding how the Bluestone PIM UI actually does it. The answer, found via network inspection: `POST /search/products/search` with a `categoryFilters` field set to `type: IN_ANY_CHILD`. That filter recursively includes products from the requested node and every node beneath it, which is the behavior you would expect from "list products in this catalog."
+
+The current implementation is three calls, two of them in parallel. The search endpoint returns only product IDs with no total count. A separate count endpoint runs at the same time to get the accurate total. Then a third call to `POST /pim/products/list/views/by-ids` resolves the IDs to product names, types, and states.
+
+**The endpoint the UI uses, but I cannot.** The Bluestone PIM UI uses `POST /pim/products/list/by-ids`, which returns a simpler flat response with the product name already as a plain string. This is the cleaner endpoint for the use case. The problem: it does not appear in the official PIM API specification. Using undocumented internal endpoints would make the integration fragile, able to break silently on any UI update. Instead I use `POST /pim/products/list/views/by-ids`, which is in the spec and returns the same data, but with names stored as context-keyed objects (`{ value: { en: "T-shirt", nl: "T-shirt" } }`). The right language key is extracted at read time.
+
+The drawback: if Bluestone changes their internal API shape, this breaks without notice. That is a real risk for an unofficial project.
+
+### What is not implemented yet, and why
+
+**Product detail and attributes.** The endpoints exist. The difficulty is presentation: Bluestone stores attribute values against definition IDs, not human-readable names. To show "Color: Blue" instead of `{ definitionId: "abc123", value: "Blue" }`, the tool would need to fetch the attribute definitions separately and join them. That is two or three extra API calls per product detail request. It is solvable, just not yet done.
+
+**Attribute editing.** Blocked on the above. Until the read side handles attributes cleanly, adding write tools on top would make the AI's behavior unpredictable.
+
+**Production environment.** The server currently hardcodes the test environment (`api.test.bluestonepim.com`). Adding production support is straightforward technically but requires decisions about credential handling that have not been made yet.
+
+**Token revocation.** Because there is no database, issued tokens cannot be invalidated before they expire. If you need to revoke access, the only option is to rotate your MAPI client secret in Bluestone PIM.
+
+## On designing for language models
+
+Building an MCP server turns out to be a different problem than building an API integration. With a traditional integration you are designing a contract between two deterministic systems. Both sides are code. Errors have codes. The full contract is testable. With MCP, one side of that contract is a language model. It reads your tool descriptions, makes judgment calls, and decides how to present results to the user. The contract is partly written in natural language, which means it is ambiguous by definition, and the model's interpretation of it shifts across versions, clients, and conversation contexts.
+
+Tool descriptions are basically prompts. They compete with every other piece of data in the context window for the model's attention. When you write "tell the user the grouping is inferred from product names, not from Bluestone data", that instruction only works if the model weights it correctly in the moment. I've moved from writing strict code to nudging probabilities. It's a weird, new way to build interfaces, and the principles are still being worked out.
+
+The data side adds its own complications. In a normal integration the API is documented and you build against the spec. Some of what this project relies on was found by watching network traffic in the Bluestone PIM UI rather than reading documentation. Endpoints the UI uses are not always in the official spec. When the spec and the actual product diverge, an unofficial project has to make a judgment call about which to follow, knowing that either choice introduces risk. I try to prefer the spec, and document where I had to go outside it.
+
+What the development loop looks like in practice: write description text, test model behavior, notice the gaps, adjust. Repeat. It is slower and less deterministic than writing code, and the feedback cycle is conversational rather than computational. I am learning as I go. I suspect most people building MCP integrations right now are too, regardless of what they are connecting.
+
+If you are thinking through the same problems (how to write tool descriptions that produce consistent model behavior, how to decide when to surface nuance versus when to simplify, how to design response shapes that give the model what it actually needs) I would like to hear how you are approaching it. Open an issue or a discussion on [GitHub](https://github.com/leafleaf90/bluestone-pim-unofficial-mcp).
   </script>
 
   <script>

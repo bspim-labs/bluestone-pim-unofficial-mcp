@@ -51,13 +51,34 @@ interface MapiCatalogsResponse {
 }
 
 
-interface MapiNodeProduct {
-  productId: string;
-  productName: string;
+interface SearchProductsResponse {
+  // data is an array of objects, not plain strings.
+  // total is NOT present — use POST /search/products/count separately.
+  data: Array<{ id: string }>;
 }
 
-interface MapiNodeProductsResponse {
-  data: MapiNodeProduct[];
+interface SearchCountResponse {
+  count: number;
+}
+
+interface MapiProductMetadata {
+  // name is context-keyed: { value: { en: "...", nl: "..." } }
+  name?: { value: Record<string, string> };
+  number?: string;
+  type?: string;   // "SINGLE" | "GROUP" | "VARIANT"
+  state?: string;  // "PLAYGROUND_ONLY" (Draft), others TBD
+  archived?: boolean;
+  lastUpdate?: number;
+  createDate?: number;
+}
+
+interface MapiProductView {
+  id: string;
+  metadata?: MapiProductMetadata;
+}
+
+interface MapiProductViewsResponse {
+  data: MapiProductView[];
 }
 
 interface MapiAttribute {
@@ -215,6 +236,37 @@ async function mapiPost<T>(
   return { data, resourceId };
 }
 
+// mapiPostBody: POST that returns a JSON response body (not a mutation with resource-id).
+async function mapiPostBody<T>(
+  url: string,
+  body: unknown,
+  creds: Credentials,
+  options?: { context?: string }
+): Promise<T> {
+  const token = await getBearerToken(creds);
+  const headers: Record<string, string> = {
+    accept: "application/json",
+    "content-type": "application/json",
+    authorization: `Bearer ${token}`,
+    // context-fallback instructs the API to return fallback-language data when
+    // the requested context has no translation, rather than returning null/empty.
+    "context-fallback": "true",
+  };
+  if (options?.context) {
+    headers["context"] = options.context;
+  }
+  const res = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(mapiErrorMessage(res.status, text));
+  }
+  return res.json() as Promise<T>;
+}
+
 async function mapiGet<T>(
   url: string,
   creds: Credentials,
@@ -224,6 +276,7 @@ async function mapiGet<T>(
   const headers: Record<string, string> = {
     accept: "application/json",
     authorization: `Bearer ${token}`,
+    "context-fallback": "true",
   };
   if (options?.context) {
     headers["context"] = options.context;
@@ -242,7 +295,7 @@ export function createMcpServer(creds: Credentials): McpServer {
   const server = new McpServer(
     {
       name: "bluestone-pim",
-      version: "1.2.0",
+      version: "1.4.0",
     },
     {
       instructions:
@@ -251,7 +304,7 @@ export function createMcpServer(creds: Credentials): McpServer {
         "What it can do right now:\n" +
         "- List available language/market contexts (list_contexts)\n" +
         "- List all catalogs and their full category tree, working state (list_catalogs)\n" +
-        "- List products in a category node, working state (list_products_in_category)\n" +
+        "- List products in a catalog including all sub-categories, working state (list_products_in_category)\n" +
         "- List published catalogs only (list_published_catalogs)\n" +
         "- List published products in a category (list_published_products_in_category)\n" +
         "- Create a new product by name (create_product)\n\n" +
@@ -330,6 +383,7 @@ export function createMcpServer(creds: Credentials): McpServer {
       },
     },
     async ({ context }) => {
+      const effectiveContext = context ?? "en";
       const catalogsData = await mapiGet<MapiCatalogsResponse>(
         `${MAPI_PIM_BASE}/catalogs`,
         creds,
@@ -350,8 +404,8 @@ export function createMcpServer(creds: Credentials): McpServer {
           {
             type: "text" as const,
             text:
-              `Found ${count} catalog${count === 1 ? "" : "s"} (working state).\n\n` +
-              JSON.stringify({ totalCount: count, catalogs }, null, 2),
+              `Found ${count} catalog${count === 1 ? "" : "s"} (working state, context: ${effectiveContext}).\n\n` +
+              JSON.stringify({ totalCount: count, context: effectiveContext, catalogs }, null, 2),
           },
         ],
       };
@@ -363,11 +417,10 @@ export function createMcpServer(creds: Credentials): McpServer {
     "list_products_in_category",
     {
       description:
-        "List products in a Bluestone PIM catalog. " +
+        "List products in a Bluestone PIM catalog, including all sub-categories. " +
         "Returns working state data, including unpublished changes. " +
-        "Call list_catalogs first, then pass the catalog id directly as nodeId. " +
-        "Returns a flat list of products with their IDs and names. " +
-        "Full attribute detail is not included here. " +
+        "Call list_catalogs first, then pass the catalog id as categoryId. " +
+        "Returns product IDs and names only, no attributes. " +
         "Pass categoryName (the catalog name from list_catalogs) so it appears in the response summary.",
       inputSchema: {
         categoryId: z
@@ -409,37 +462,94 @@ export function createMcpServer(creds: Credentials): McpServer {
     async ({ categoryId, categoryName, limit, page, context }) => {
       const effectiveLimit = limit ?? DEFAULT_PRODUCT_LIMIT;
       const effectivePage = page ?? DEFAULT_PAGE;
+      const label = categoryName ?? categoryId;
+      const effectiveContext = context ?? "en";
 
-      // MAPI pagination: page is 0-indexed, pageSize defaults to 1000.
-      // The tool exposes 1-indexed pages to the model; we subtract 1 here.
-      const params = new URLSearchParams({
-        page: String(effectivePage - 1),
-        pageSize: String(effectiveLimit),
-      });
+      // The category filter body is shared between the search and count calls.
+      const filterBody = {
+        categoryFilters: [{ categoryId, type: "IN_ANY_CHILD" }],
+      };
 
-      const data = await mapiGet<MapiNodeProductsResponse>(
-        `${MAPI_PIM_BASE}/catalogs/nodes/${categoryId}/products?${params}`,
+      // Step 1: Run the paginated search and a total count in parallel.
+      // The search response contains only IDs — no total count field.
+      // Total comes from a separate /count endpoint with the same filter body.
+      const [searchResponse, countResponse] = await Promise.all([
+        mapiPostBody<SearchProductsResponse>(
+          `${MAPI_SEARCH_BASE}/products/search?archiveState=ACTIVE`,
+          { ...filterBody, page: effectivePage - 1, pageSize: effectiveLimit },
+          creds,
+          { context }
+        ),
+        mapiPostBody<SearchCountResponse>(
+          `${MAPI_SEARCH_BASE}/products/count`,
+          filterBody,
+          creds,
+          { context }
+        ),
+      ]);
+
+      const productIds = (searchResponse.data ?? []).map((p) => p.id);
+      const total = countResponse.count ?? 0;
+
+      if (productIds.length === 0) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text:
+                `No products found in "${label}" (working state, context: ${effectiveContext}).\n\n` +
+                JSON.stringify(
+                  { category: label, context: effectiveContext, total: 0, page: effectivePage, returned: 0, hasMore: false, products: [] },
+                  null,
+                  2
+                ),
+            },
+          ],
+        };
+      }
+
+      // Step 2: Resolve IDs to product data via POST /pim/products/list/views/by-ids.
+      // Note: the UI uses POST /pim/products/list/by-ids (simpler flat response with name
+      // as a plain string) but that endpoint is not in the official PIM API spec.
+      // We use list/views/by-ids with the METADATA view instead — name comes back as
+      // { value: { en: "...", nl: "..." } } and we extract the requested context key.
+      const viewsResponse = await mapiPostBody<MapiProductViewsResponse>(
+        `${MAPI_PIM_BASE}/products/list/views/by-ids?archiveState=ACTIVE`,
+        {
+          ids: productIds,
+          views: [{ type: "METADATA" }],
+        },
         creds,
         { context }
       );
 
-      const products = data.data.map((p) => ({
-        id: p.productId,
-        name: p.productName,
-      }));
+      const products = (viewsResponse.data ?? []).map((p) => {
+        // Extract name for the requested context, falling back to English, then any value.
+        const nameValues = p.metadata?.name?.value ?? {};
+        const name =
+          nameValues[effectiveContext] ??
+          nameValues["en"] ??
+          Object.values(nameValues)[0] ??
+          "";
+        return {
+          id: p.id,
+          name,
+          ...(p.metadata?.number && { number: p.metadata.number }),
+          ...(p.metadata?.type && { type: p.metadata.type }),
+          ...(p.metadata?.state && { state: p.metadata.state }),
+        };
+      });
 
       const returned = products.length;
-      // MAPI does not return totalCount for this endpoint.
-      // If the page is full, there may be more results.
-      const hasMore = returned === effectiveLimit;
-      const label = categoryName ?? categoryId;
+      const hasMore = total > effectivePage * effectiveLimit;
 
       return {
         content: [
           {
             type: "text" as const,
             text:
-              `Found products in "${label}" (working state). Returned ${returned} on page ${effectivePage}` +
+              `Found ${total} product${total === 1 ? "" : "s"} in "${label}" (working state, includes sub-categories, context: ${effectiveContext}). ` +
+              `Returned ${returned} on page ${effectivePage}` +
               (hasMore
                 ? `. Call again with page=${effectivePage + 1} to fetch more.`
                 : ".") +
@@ -447,6 +557,8 @@ export function createMcpServer(creds: Credentials): McpServer {
               JSON.stringify(
                 {
                   category: label,
+                  context: effectiveContext,
+                  total,
                   page: effectivePage,
                   returned,
                   hasMore,
@@ -626,5 +738,3 @@ export function createMcpServer(creds: Credentials): McpServer {
   return server;
 }
 
-// MAPI_SEARCH_BASE is reserved for the search_products tool (see TODO.md).
-export { MAPI_SEARCH_BASE };

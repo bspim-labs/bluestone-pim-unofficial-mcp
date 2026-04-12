@@ -56,9 +56,9 @@ Expose as 1-indexed to the model; subtract 1 before passing to Bluestone.
 ```
 Expose as 1-indexed to the model; subtract 1 before passing. Default of 1000 means most node listings fit in one call.
 
-**Search API `/search/products/search` and `/search/find`:** `page` + `pageSize` (1-indexed, max pageSize 100 for structured search, 1000 for full-text `find`)
+**Search API `/search/products/search` and `/search/find`:** `page` + `pageSize` (0-indexed, max pageSize 100 for structured search, 1000 for full-text `find`)
 
-Response shape varies — see Search endpoints section below. Not all MAPI responses include `totalCount`; the node products endpoint returns `{ data: [...] }` with no count.
+`POST /search/products/search` returns `{ data: [{ id: string }] }` — objects, not plain strings, and **no total field**. Fetch the total separately via `POST /search/products/count` with the same filter body (returns `{ count: int }`). Run both in parallel.
 
 ---
 
@@ -67,6 +67,7 @@ Response shape varies — see Search endpoints section below. Not all MAPI respo
 | Parameter | Type | Where | Meaning |
 |---|---|---|---|
 | `context` | **header** | MAPI + Search | Language/market context. Default `"en"`. Custom context IDs start with lowercase `"l"` (not digit `"1"`) followed by a number, e.g. `"l3600"`. Use `GET /global-settings/context` (Bearer auth) to list available values. Pass as `context: <value>` request header. |
+| `context-fallback` | **header** | MAPI + Search | Send `"true"` on every MAPI/Search request. When a product has no translation for the requested context, the API returns the fallback language's value instead of null/empty. All `mapiGet` and `mapiPostBody` helpers send this by default. |
 | `archiveState` | query param | MAPI | `ACTIVE` (default), `ARCHIVED`, or `ALL` |
 | `subCategories` | query param | PAPI `/categories/{id}/products` | `true` to include nested subcategories — always use this |
 
@@ -83,6 +84,30 @@ The `context` header should be exposed as an optional parameter on any tool that
 | `SINGLE` | Standalone product with no variants. |
 
 Variants should always be displayed nested under their parent GROUP, never as top-level items.
+
+## Product states
+
+| API value | UI label | Meaning |
+|---|---|---|
+| `PLAYGROUND_ONLY` | Draft | Created and edited in working state, not yet synced/published |
+
+Other state values are not yet confirmed. Pass the raw `state` value in tool responses so the model can surface it.
+
+## General Information fields (native product fields)
+
+These are system fields present on every product, independent of how a user has configured their column setup. Available in the METADATA view of `list/views/by-ids`:
+
+| Field | Type | Notes |
+|---|---|---|
+| `name` | context-keyed object | `{ value: { en: "...", nl: "..." } }` — extract the requested context key |
+| `number` | string | Product SKU / item number |
+| `type` | string | `SINGLE`, `GROUP`, or `VARIANT` |
+| `state` | string | `PLAYGROUND_ONLY` (Draft), others TBD |
+| `archived` | boolean | Whether the product is archived |
+| `lastUpdate` | epoch ms | Last modification timestamp |
+| `createDate` | epoch ms | Creation timestamp |
+
+These are distinct from **Attributes**, which are custom per-organisation and require a separate definitions fetch to resolve IDs to human-readable names.
 
 ---
 
@@ -109,9 +134,9 @@ Base URL: `https://api.test.bluestonepim.com/search`. Same Bearer token auth as 
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/find` | Full-text search across product name, description, number, attributes. Params: `query`, `searchableFields`, `fuzziness` (ZERO/ONE/TWO/AUTO), `highlight`, `fragmentSize`, `page`, `pageSize` (max 1000). Returns `{ data: [string], total: int }`. |
-| POST | `/products/search` | Structured search with rich filters: `typeFilter`, `categoryFilters`, `attributeFilters`, `publishStateFilter`, `validationStatusFilter`, date filters, score filters. `pageSize` max 100. **Returns IDs only** (`MatchedProduct` with id). Requires follow-up fetch to get names. |
+| POST | `/products/search` | Structured search with rich filters: `typeFilter`, `categoryFilters`, `attributeFilters`, `publishStateFilter`, `validationStatusFilter`, date filters, score filters. `pageSize` max 100. **Returns `{ data: [{ id: string }] }` — objects with id, no total.** Pair with `/products/count` for totals. |
 | POST | `/products/scroll/search` | Same as above but scroll-based pagination via `scrollId` — better for large result sets. |
-| POST | `/products/count` | Count products matching a filter set. Same filter shape as `/products/search`, no pagination. Returns `{ count: int }`. |
+| POST | `/products/count` | Count products matching a filter set. Same filter body as `/products/search`, no pagination params needed. Returns `{ count: int }`. Run in parallel with the search call. |
 | POST | `/assets/search` | Search assets. Filters: name, products, categories, labels, media type, dimensions, file size. `resultsPerPage` max 100. |
 | POST | `/assets/cursor` | Cursor-based asset search — better for streaming large asset lists. |
 | POST | `/assets/count` | Count assets matching filters. |
@@ -122,7 +147,7 @@ Base URL: `https://api.test.bluestonepim.com/search`. Same Bearer token auth as 
 
 ## Confirmed MAPI response shapes
 
-From direct testing against `api.test.bluestonepim.com`:
+From direct testing and UI network inspection against `api.test.bluestonepim.com`:
 
 **`GET /pim/catalogs`**
 ```json
@@ -138,6 +163,39 @@ Returns the full nested tree rooted at the catalog node. Each node has `children
 { "data": [{ "productId", "productName" }] }
 ```
 Minimal shape — no attributes, no product type, no pagination metadata. Use `page`/`pageSize` query params to page.
+
+**`POST /search/products/search`** (confirmed via UI network inspection)
+```json
+{ "data": [{ "id": "69da487cd41d9dd3b63c0ed1" }] }
+```
+No `total` field. IDs are wrapped in objects, not plain strings. Always pair with `POST /search/products/count`.
+
+**`POST /search/products/count`** (confirmed via UI network inspection)
+```json
+{ "count": 1 }
+```
+Uses the same filter body as `/search/products/search`. No page/pageSize needed.
+
+**`POST /pim/products/list/views/by-ids` with `views: [{ type: "METADATA" }]`** (confirmed via UI network inspection)
+```json
+{
+  "data": [{
+    "id": "69da487cd41d9dd3b63c0ed1",
+    "metadata": {
+      "name": { "value": { "en": "T-shirt - Green" } },
+      "number": "69da487cd41d9dd3b63c0ed1",
+      "state": "PLAYGROUND_ONLY",
+      "type": "SINGLE",
+      "archived": false,
+      "lastUpdate": 1775955888298,
+      "createDate": 1775913084713
+    }
+  }]
+}
+```
+`name` is a context-keyed object, not a plain string. Extract with `name.value[context] ?? name.value["en"]`. Known `state` values: `PLAYGROUND_ONLY` (shown as "Draft" in the UI). Other states TBD.
+
+**Note on `POST /pim/products/list/by-ids`:** The UI also calls this endpoint (without `/views/`), which returns a simpler flat response with `name` as a plain string plus `type`, `state`, and other native fields at the top level. This endpoint is **not in the official PIM API spec** and is therefore not used in the MCP. We use `list/views/by-ids` instead and extract the context key from the name object manually.
 
 **`GET /pim/products/{id}/groupedAttributes`**
 ```json
