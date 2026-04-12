@@ -370,7 +370,7 @@ export function createMcpServer(creds: Credentials): McpServer {
         "Full attribute detail is not included here. " +
         "Pass categoryName (the catalog name from list_catalogs) so it appears in the response summary.",
       inputSchema: {
-        nodeId: z
+        categoryId: z
           .string()
           .describe(
             "The catalog ID from list_catalogs. Pass it directly here to list products in that catalog."
@@ -406,7 +406,7 @@ export function createMcpServer(creds: Credentials): McpServer {
           ),
       },
     },
-    async ({ nodeId, categoryName, limit, page, context }) => {
+    async ({ categoryId, categoryName, limit, page, context }) => {
       const effectiveLimit = limit ?? DEFAULT_PRODUCT_LIMIT;
       const effectivePage = page ?? DEFAULT_PAGE;
 
@@ -418,7 +418,7 @@ export function createMcpServer(creds: Credentials): McpServer {
       });
 
       const data = await mapiGet<MapiNodeProductsResponse>(
-        `${MAPI_PIM_BASE}/catalogs/nodes/${nodeId}/products?${params}`,
+        `${MAPI_PIM_BASE}/catalogs/nodes/${categoryId}/products?${params}`,
         creds,
         { context }
       );
@@ -432,7 +432,7 @@ export function createMcpServer(creds: Credentials): McpServer {
       // MAPI does not return totalCount for this endpoint.
       // If the page is full, there may be more results.
       const hasMore = returned === effectiveLimit;
-      const label = categoryName ?? nodeId;
+      const label = categoryName ?? categoryId;
 
       return {
         content: [
