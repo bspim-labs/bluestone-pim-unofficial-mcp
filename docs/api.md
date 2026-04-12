@@ -9,24 +9,26 @@
 
 ---
 
-## Public API (PAPI) — read-only
+## Public API (PAPI) — published data only
 
 Base path: `/v1`  
-Authentication: static header `x-api-key`
+Authentication: static header `x-api-key`  
+Pagination: `itemsOnPage` + `pageNo` (0-indexed)
 
-This is the API used by the MCP server. No token refresh required.
+Returns only published/synced data. Used by the `list_published_*` tools.
 
-### List categories
+### List published categories
 
 ```
 GET /v1/categories
 ```
 
 ```bash
-curl --request GET \
-     --url https://api.test.bluestonepim.com/v1/categories \
-     --header 'accept: application/json' \
-     --header 'x-api-key: YOUR_KEY'
+curl -s \
+  --url https://api.test.bluestonepim.com/v1/categories \
+  --header 'accept: application/json' \
+  --header 'x-api-key: YOUR_KEY' \
+  | python3 -m json.tool
 ```
 
 Response shape:
@@ -39,37 +41,27 @@ Response shape:
       "order": 0,
       "name": "Products",
       "number": "aaa000000000000000000001",
-      "description": "",
-      "attributes": [...],
-      "categoryAttributes": [...]
+      "description": ""
     }
   ]
 }
 ```
 
-Key fields:
-- `id` — used as `categoryId` in product requests
-- `order` — display order (0 = first)
-- `attributes` — attribute definitions available for products in this category
-- `categoryAttributes` — attributes that describe the category itself
-
 ---
 
-### List products in a category
+### List published products in a category
 
 ```
-GET /v1/categories/{categoryId}/products?subCategories=true
+GET /v1/categories/{categoryId}/products?subCategories=true&itemsOnPage={n}&pageNo={0-indexed}
 ```
 
 ```bash
-curl --request GET \
-     --url 'https://api.test.bluestonepim.com/v1/categories/aaa000000000000000000001/products?subCategories=true' \
-     --header 'accept: application/json' \
-     --header 'x-api-key: YOUR_KEY'
+curl -s \
+  --url 'https://api.test.bluestonepim.com/v1/categories/aaa000000000000000000001/products?subCategories=true' \
+  --header 'accept: application/json' \
+  --header 'x-api-key: YOUR_KEY' \
+  | python3 -m json.tool
 ```
-
-Query parameters:
-- `subCategories=true` — include products from nested subcategories (always use this)
 
 Response shape:
 ```json
@@ -80,92 +72,238 @@ Response shape:
       "id": "bbb000000000000000000001",
       "type": "GROUP",
       "name": "Example Product Name",
-      "number": "bbb000000000000000000001",
-      "lastUpdate": 1774341927942,
-      "createDate": 1774337867081,
-      "attributes": [
-        {
-          "id": "...",
-          "name": "Length",
-          "groupName": "Dimensions",
-          "dataType": "decimal",
-          "unit": "mm",
-          "values": ["3000"],
-          "definingAttribute": false
-        }
-      ],
-      "media": [
-        {
-          "id": "23b32451-b403-435a-9918-8f7f0ec557d5",
-          "downloadUri": "https://media.test.bluestonepim.com/.../photo.jpg",
-          "previewUri": "https://media.test.bluestonepim.com/.../photo.jpg?f=jpg&w=400",
-          "name": "Product hero shot",
-          "fileName": "323300004.jpg",
-          "contentType": "image/jpeg",
-          "labels": ["PPE-accessible", "pb"],
-          "createdAt": 1631884720598,
-          "updatedAt": 1724059213810
-        }
-      ],
-      "variants": ["id1", "id2"],
-      "categories": ["cat-id-1", "cat-id-2"]
+      "number": "59215"
     }
   ]
 }
 ```
 
-Key fields on each product:
-- `type` — `GROUP`, `VARIANT`, or `SINGLE`
-- `number` — the item number (human-readable, e.g. `"59215"`)
-- `lastUpdate` — Unix timestamp in milliseconds
-- `attributes[].values` — array of string values (empty if not set)
-- `attributes[].dictionary` — for dictionary-type attributes, the selected value(s)
-- `attributes[].definingAttribute` — true if this attribute differentiates variants within a GROUP
-- `variants` — IDs of child VARIANT products (only on GROUP type)
-- `variantParentId` — ID of parent GROUP (only on VARIANT type)
-- `media[].previewUri` — publicly accessible thumbnail URL (`?f=jpg&w=400`). Passed through in MCP tool responses so Claude can render images inline.
-- `media[].downloadUri` — full-resolution URL. Not included in MCP tool responses (no use case in chat).
-- `media[].name` — descriptive name of the asset (e.g. "Product hero shot"). Falls back to `labels[0]` then `fileName` if absent.
+---
+
+## Management API (MAPI) — working state read/write
+
+Three API families share the same Bearer token and base domain:
+
+| Family | Base path | Used for |
+|---|---|---|
+| PIM | `/pim` | Products, catalogs, categories |
+| Search | `/search` | Full-text and structured product search |
+| Global Settings | `/global-settings` | Contexts (languages/markets) |
+
+Authentication: OAuth 2.0 client credentials flow. The server fetches a Bearer token from `https://idp.test.bluestonepim.com/op/token`, caches it per `clientId`, and refreshes it 60 seconds before expiry (tokens last 1 hour). In serverless mode the cache is per function instance and does not persist across cold starts.
+
+Common request headers:
+```
+authorization: Bearer <token>
+context: <context-id>          (optional — e.g. "en", "l3600")
+context-fallback: true         (always sent — returns fallback-language data instead of null)
+```
 
 ---
 
-## Management API (MAPI) — read/write
+### List contexts
 
-Base path: `/`  
-Authentication: OAuth2 Bearer token (client credentials flow)
+```
+GET /global-settings/context
+```
 
-The MAPI is used for write operations. The server obtains a Bearer token automatically using the `MAPI_CLIENT_ID` and `MAPI_CLIENT_SECRET` credentials, caches it per client ID, and refreshes it 60 seconds before expiry (tokens last 1 hour).
+Response shape:
+```json
+{
+  "data": [
+    {
+      "id": "en",
+      "name": "English",
+      "locale": "en-GB",
+      "fallback": "",
+      "initial": true,
+      "archived": false
+    }
+  ]
+}
+```
+
+---
+
+### List catalogs
+
+```
+GET /pim/catalogs
+```
+
+Response shape:
+```json
+{
+  "data": [
+    {
+      "id": "aaa000000000000000000001",
+      "name": "Products",
+      "number": "PROD",
+      "description": "",
+      "readOnly": false
+    }
+  ]
+}
+```
+
+The catalog `id` is used directly as the `categoryId` in product search calls.
+
+---
+
+### Search products (IDs only)
+
+```
+POST /search/products/search?archiveState=ACTIVE
+Body: {
+  "categoryFilters": [{ "categoryId": "...", "type": "IN_ANY_CHILD" }],
+  "page": 0,
+  "pageSize": 50
+}
+```
+
+Response shape:
+```json
+{
+  "data": [{ "id": "bbb000000000000000000001" }, { "id": "bbb000000000000000000002" }]
+}
+```
+
+Note: `data` contains objects with an `id` field, not plain strings. There is no `total` field — use the count endpoint below.
+
+---
+
+### Count products matching a filter
+
+```
+POST /search/products/count
+Body: {
+  "categoryFilters": [{ "categoryId": "...", "type": "IN_ANY_CHILD" }]
+}
+```
+
+Response shape:
+```json
+{ "count": 47 }
+```
+
+---
+
+### Resolve product IDs to metadata
+
+```
+POST /pim/products/list/views/by-ids?archiveState=ACTIVE
+Body: {
+  "ids": ["bbb000000000000000000001", "bbb000000000000000000002"],
+  "views": [{ "type": "METADATA" }]
+}
+```
+
+Response shape:
+```json
+{
+  "data": [
+    {
+      "id": "bbb000000000000000000001",
+      "metadata": {
+        "name": { "value": { "en": "Example Product", "nl": "Voorbeeldproduct" } },
+        "number": "59215",
+        "type": "SINGLE",
+        "state": "PLAYGROUND_ONLY",
+        "archived": false,
+        "lastUpdate": 1774341927942,
+        "createDate": 1774337867081
+      }
+    }
+  ]
+}
+```
+
+Key fields:
+- `metadata.name.value` — context-keyed object, not a plain string. Extract with `value[context] ?? value["en"] ?? Object.values(value)[0]`
+- `metadata.state` — raw API value (e.g. `PLAYGROUND_ONLY`). Mapped to UI labels via `mapProductState()` in `src/tools.ts`
+- `metadata.type` — `SINGLE`, `GROUP`, or `VARIANT`
+
+Note: the Bluestone UI uses `POST /pim/products/list/by-ids` (returns name as a plain string), but that endpoint is not in the official PIM spec. This integration uses `list/views/by-ids` with the METADATA view instead.
+
+---
 
 ### Create product
 
 ```
 POST /pim/products
-Header: authorization: Bearer <token>
 Body: { "name": "..." }
+→ 201 Created
+→ resource-id: <new-product-id>   (response header, body is empty)
 ```
 
-The created product's ID is returned in the `resource-id` response header (the body is empty).
+```bash
+curl -s -i \
+  --request POST \
+  --url https://api.test.bluestonepim.com/pim/products \
+  --header 'accept: application/json' \
+  --header 'content-type: application/json' \
+  --header 'authorization: Bearer YOUR_TOKEN' \
+  --data '{"name":"Test Product"}'
+```
 
-See [extending.md](extending.md) for how to add further MAPI write tools.
+---
+
+### Assign product to a catalog category
+
+```
+POST /pim/catalogs/nodes/{nodeId}/products
+Body: { "productId": "..." }
+→ 204 No Content   (no body, no resource-id header)
+```
+
+`nodeId` is the catalog category ID (same value used in search `categoryFilters`). Called after `POST /pim/products` when `categoryId` is provided to `create_product`.
+
+```bash
+curl -s -i \
+  --request POST \
+  --url https://api.test.bluestonepim.com/pim/catalogs/nodes/aaa000000000000000000001/products \
+  --header 'content-type: application/json' \
+  --header 'authorization: Bearer YOUR_TOKEN' \
+  --data '{"productId":"bbb000000000000000000001"}'
+```
+
+---
+
+## Product states
+
+Raw state values from the API are mapped to UI labels by `mapProductState()` in `src/tools.ts`. Add new mappings there as they are discovered.
+
+| API value | UI label |
+|---|---|
+| `PLAYGROUND_ONLY` | `Draft` |
 
 ---
 
 ## Testing API calls directly
 
-Use these curl commands to verify connectivity independent of the MCP server:
-
 ```bash
-# List categories
+# Get a Bearer token
 curl -s \
-  --url https://api.test.bluestonepim.com/v1/categories \
-  --header 'accept: application/json' \
-  --header 'x-api-key: your-papi-key-here' \
+  --request POST \
+  --url https://idp.test.bluestonepim.com/op/token \
+  --header 'content-type: application/x-www-form-urlencoded' \
+  --data 'grant_type=client_credentials&client_id=YOUR_CLIENT_ID&client_secret=YOUR_CLIENT_SECRET' \
   | python3 -m json.tool
 
-# List products in "Products" category
+# List catalogs
 curl -s \
-  --url 'https://api.test.bluestonepim.com/v1/categories/aaa000000000000000000001/products?subCategories=true' \
+  --url https://api.test.bluestonepim.com/pim/catalogs \
   --header 'accept: application/json' \
-  --header 'x-api-key: your-papi-key-here' \
+  --header 'authorization: Bearer YOUR_TOKEN' \
+  | python3 -m json.tool
+
+# Search products in a catalog
+curl -s \
+  --request POST \
+  --url 'https://api.test.bluestonepim.com/search/products/search?archiveState=ACTIVE' \
+  --header 'accept: application/json' \
+  --header 'content-type: application/json' \
+  --header 'authorization: Bearer YOUR_TOKEN' \
+  --data '{"categoryFilters":[{"categoryId":"aaa000000000000000000001","type":"IN_ANY_CHILD"}],"page":0,"pageSize":10}' \
   | python3 -m json.tool
 ```

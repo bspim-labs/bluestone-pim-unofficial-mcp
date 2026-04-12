@@ -4,19 +4,117 @@ Claude uses tool descriptions to decide when and how to call each tool. The desc
 
 ---
 
-## `session_init`
+## `list_contexts`
 
-**Purpose:** Always called first at the start of every conversation, before any other tool. Returns a beta notice that Claude must show the user verbatim, then asks whether to proceed.
+**Purpose:** List all available language and market contexts in the organisation.
 
 **Input:** None
 
-**Why it exists:** Ensures the user knows this is an experimental integration with limited capabilities before any API calls are made.
+**API call:**
+```
+GET /global-settings/context
+Header: authorization: Bearer <token>
+```
+
+**What Claude does with the result:**
+- Presents context IDs, names, and locales
+- Identifies the default context
+- Tells the user to mention the context name or ID when they want results in a specific language
+
+**Example prompts that trigger this tool:**
+- "What languages are available?"
+- "Switch to Dutch"
+- "Show me contexts"
 
 ---
 
 ## `list_catalogs`
 
-**Purpose:** Fetch all categories in the Bluestone PIM organisation.
+**Purpose:** Fetch all catalogs in the Bluestone PIM organisation. Returns working state data, including unpublished changes.
+
+**Input:**
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `context` | string | No | Language/market context ID (e.g. `"en"`, `"l3600"`). Defaults to `"en"`. |
+
+**API call:**
+```
+GET /pim/catalogs
+Header: authorization: Bearer <token>
+Header: context: <context>
+Header: context-fallback: true
+```
+
+**What Claude does with the result:**
+- Lists catalogs with ID, name, and number
+- Uses the catalog ID directly as `categoryId` in `list_products_in_category`
+
+**Example prompts:**
+- "Show me the catalogs"
+- "List all catalogs"
+
+---
+
+## `list_products_in_category`
+
+**Purpose:** List products in a catalog, including all sub-categories. Returns working state data, including unpublished changes. Uses a three-step process internally: search for IDs, count total, then resolve to product data.
+
+**Input:**
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `categoryId` | string | Yes | The catalog ID from `list_catalogs` |
+| `categoryName` | string | No | Human-readable catalog name (shown in response summary) |
+| `limit` | number | No | Products per page (default 50, max 200) |
+| `page` | number | No | Page number, 1-indexed (default 1) |
+| `context` | string | No | Language/market context ID. Defaults to `"en"`. |
+
+**API calls (three steps):**
+
+Step 1 + 2 run in parallel:
+```
+POST /search/products/search?archiveState=ACTIVE
+Body: { categoryFilters: [{ categoryId, type: "IN_ANY_CHILD" }], page, pageSize }
+→ returns { data: [{ id: string }] }   (IDs only, no total)
+
+POST /search/products/count
+Body: { categoryFilters: [{ categoryId, type: "IN_ANY_CHILD" }] }
+→ returns { count: number }
+```
+
+Step 3:
+```
+POST /pim/products/list/views/by-ids?archiveState=ACTIVE
+Body: { ids: [...], views: [{ type: "METADATA" }] }
+→ returns { data: [{ id, metadata: { name: { value: { en, nl, ... } }, type, state, ... } }] }
+```
+
+Note: the Bluestone UI uses `POST /pim/products/list/by-ids` (simpler flat response with name as a plain string), but that endpoint is not in the official PIM API spec. This integration uses `list/views/by-ids` with the METADATA view instead. Name comes back as a context-keyed object (`{ value: { en: "...", nl: "..." } }`) and is resolved to the requested context with English as fallback.
+
+**Product states:** Raw API state values are mapped to UI labels before being returned. Known mappings:
+
+| API value | UI label |
+|---|---|
+| `PLAYGROUND_ONLY` | `Draft` |
+
+Add new mappings in `mapProductState()` in `src/tools.ts` as they are discovered.
+
+**What Claude does with the result:**
+- Displays products with name, type, and state
+- Shows pagination info and prompts to fetch more if `hasMore` is true
+- After displaying the list, asks the user if they would like to create a new product in this catalog
+
+**Example prompts:**
+- "List products in the Products catalog"
+- "What's in the DPP catalog?"
+- "Show me products in Dutch"
+
+---
+
+## `list_published_catalogs`
+
+**Purpose:** List published (live) catalogs. Returns only data that has been synced — no unpublished changes.
 
 **Input:** None
 
@@ -26,105 +124,75 @@ GET /v1/categories
 Header: x-api-key
 ```
 
-**What Claude does with the result:**
-- Presents categories sorted by their `order` field (the display order set in Bluestone)
-- Shows category name and ID
-- Only mentions category attributes if the user specifically asks
-
-**Example prompts that trigger this tool:**
-- "Show me the catalogs"
-- "What categories are in the PIM?"
-- "List the catalogs"
-
-**Example output in chat:**
-
-```
-Here are the 7 categories in your Bluestone PIM:
-
-1. Products — aaa000000000000000000001
-2. Channels — aaa000000000000000000002
-3. Archived Products — aaa000000000000000000003
-4. DPP — aaa000000000000000000004
-5. Supplier Data Onboarding — aaa000000000000000000005
-
-Which category would you like to see products from?
-```
+**What Claude does:**
+- Lists published catalogs sorted by display order
+- Uses these IDs with `list_published_products_in_category`
 
 ---
 
-## `list_products_in_category`
+## `list_published_products_in_category`
 
-**Purpose:** Fetch all products in a category and its subcategories.
+**Purpose:** List published (live) products in a category. Returns only synced data — no unpublished changes.
 
 **Input:**
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `categoryId` | string | Yes | The category ID from `list_catalogs` |
-| `categoryName` | string | No | Human-readable name (for display context) |
+| `categoryId` | string | Yes | Category ID from `list_published_catalogs` |
+| `categoryName` | string | No | Human-readable name (shown in response summary) |
+| `limit` | number | No | Products per page (default 50, max 200) |
+| `page` | number | No | Page number, 1-indexed (default 1) |
 
 **API call:**
 ```
-GET /v1/categories/{categoryId}/products?subCategories=true
+GET /v1/categories/{categoryId}/products?subCategories=true&itemsOnPage={limit}&pageNo={page-1}
 Header: x-api-key
 ```
 
-The `subCategories=true` parameter ensures products in nested subcategories are included.
-
-**What Claude does with the result:**
-
-The tool returns the full product data including all attribute values. Claude uses this to:
-- List products with name, item number, and type (GROUP / VARIANT / SINGLE)
-- Ask if the user wants to see details for any specific product
-- If asked, display attribute values grouped by their attribute group (Dimensions, Marketing, ETIM, etc.)
-
-**Product types:**
-
-| Type | Meaning |
-|---|---|
-| `GROUP` | A parent product with variants. The `variantIds` field lists the variant IDs. |
-| `VARIANT` | A specific variant of a GROUP product. The `variantOf` field points to the parent. |
-| `SINGLE` | A standalone product with no variants. |
-
-**Example prompts that trigger this tool:**
-- "List products in the Products category"
-- "Show me what's in Channels"
-- "What products are in DPP?"
-
-**Example follow-up prompts that Claude answers from the already-fetched data (no second tool call needed):**
-- "Show me the details for Example Product Name"
-- "What are the dimensions of Example Variant Name?"
-- "Which of these are GROUP products?"
+PAPI pagination uses 0-indexed `pageNo` — the tool subtracts 1 from the 1-indexed `page` input.
 
 ---
 
 ## `create_product`
 
-**Purpose:** Create a new product in Bluestone PIM via the Management API (MAPI).
+**Purpose:** Create a new product in Bluestone PIM. Optionally assigns it to a catalog category after creation.
 
 **Input:**
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `name` | string | Yes | The product name — Claude will ask the user for this before calling |
+| `name` | string | Yes | Product name — Claude will confirm with the user before calling |
+| `categoryId` | string | No | Catalog category ID to assign the product to after creation |
 
-**API call:**
+**API calls:**
+
+Step 1 — create the product:
 ```
 POST /pim/products
 Header: authorization: Bearer <token>
 Body: { "name": "..." }
+→ 201, resource-id header contains the new product ID
 ```
 
-Authentication is handled automatically — the server fetches a Bearer token from the identity provider on first use, caches it in memory, and refreshes it 60 seconds before it expires (tokens last 1 hour). In serverless (Vercel) mode the cache is per function instance and does not persist across cold starts.
+Step 2 — assign to category (only if `categoryId` is provided):
+```
+POST /pim/catalogs/nodes/{categoryId}/products
+Header: authorization: Bearer <token>
+Body: { "productId": "..." }
+→ 204 No Content
+```
+
+If the category assignment fails, the product creation is still reported as successful with a note explaining the assignment error.
 
 **What Claude does:**
-- If the user hasn't provided a name, Claude asks before calling the tool
-- On success, confirms the product was created and returns the new product ID (always present — taken from the `resource-id` response header)
+- Confirms the product name with the user before calling
+- If called from `list_products_in_category`, the `categoryId` is passed automatically so the product is assigned to the same catalog
+- On success, confirms creation (and assignment if applicable) and suggests opening Bluestone PIM to continue enriching the product
 
-**Example prompts that trigger this tool:**
+**Example prompts:**
 - "Create a product called Test Widget"
-- "Add a new product named Example Product"
-- "Create a new product"  ← Claude will ask for the name before proceeding
+- "Add a new product" — Claude will ask for the name first
+- After listing products: "Yes, create a product here" — Claude will ask for the name and pass the `categoryId`
 
 ---
 
@@ -132,4 +200,4 @@ Authentication is handled automatically — the server fetches a Bearer token fr
 
 At startup, Claude Desktop sends a `tools/list` request to the MCP server. The server responds with the tool name, description, and input schema for each tool. Claude stores these and uses the descriptions to match user intent.
 
-The input schema (defined with Zod) tells Claude what parameters to fill in and their types. Claude infers the values from the conversation — for example, it extracts the `categoryId` from the category the user mentioned, using the ID it received from `list_catalogs`.
+The input schema (defined with Zod) tells Claude what parameters to fill in and their types. Claude infers the values from the conversation — for example, it extracts the `categoryId` from the catalog the user mentioned, using the ID it received from `list_catalogs`.

@@ -318,12 +318,11 @@ export function createMcpServer(creds: Credentials): McpServer {
         "- List products in a catalog including all sub-categories, working state (list_products_in_category)\n" +
         "- List published catalogs only (list_published_catalogs)\n" +
         "- List published products in a category (list_published_products_in_category)\n" +
-        "- Create a new product by name (create_product)\n\n" +
+        "- Create a new product by name, optionally assigned to a catalog category (create_product)\n\n" +
         "What it cannot do yet:\n" +
         "- Fetch full product detail or attributes\n" +
         "- Set product attributes or media\n" +
-        "- Update or delete products\n" +
-        "- Assign products to categories\n\n" +
+        "- Update or delete products\n\n" +
         "Working state vs published: the default read tools return working state data, " +
         "which includes unpublished changes and is what enrichment teams work with. " +
         "Use the list_published_* tools when the user specifically asks about live/published data.\n\n" +
@@ -432,7 +431,9 @@ export function createMcpServer(creds: Credentials): McpServer {
         "Returns working state data, including unpublished changes. " +
         "Call list_catalogs first, then pass the catalog id as categoryId. " +
         "Returns product IDs and names only, no attributes. " +
-        "Pass categoryName (the catalog name from list_catalogs) so it appears in the response summary.",
+        "Pass categoryName (the catalog name from list_catalogs) so it appears in the response summary. " +
+        "After displaying the product list, ask the user if they would like to create a new product in this catalog. " +
+        "If they say yes, call create_product and pass the same categoryId so the product is assigned automatically.",
       inputSchema: {
         categoryId: z
           .string()
@@ -715,16 +716,23 @@ export function createMcpServer(creds: Credentials): McpServer {
         "Create a new product in Bluestone PIM. " +
         "The product name is required — always confirm the name with the user before calling this tool. " +
         "Returns the name and ID of the newly created product. " +
-        "After creating, do NOT offer to add attributes or assign the product to a category — these tools do not exist yet. " +
-        "Instead, tell the user the product was created and suggest they open Bluestone PIM to continue enriching it.",
+        "If categoryId is provided, the product will also be assigned to that catalog category after creation. " +
+        "After creating, tell the user the product was created and suggest they open Bluestone PIM to continue enriching it.",
       inputSchema: {
         name: z
           .string()
           .min(1)
           .describe("The product name — must be confirmed by the user before calling."),
+        categoryId: z
+          .string()
+          .optional()
+          .describe(
+            "Optional catalog category ID to assign the product to after creation. " +
+            "Pass the categoryId from list_products_in_category or list_catalogs."
+          ),
       },
     },
-    async ({ name }) => {
+    async ({ name, categoryId }) => {
       const { resourceId } = await mapiPost<Record<string, unknown>>(
         "/pim/products",
         { name },
@@ -735,6 +743,38 @@ export function createMcpServer(creds: Credentials): McpServer {
           "Product was created but no resource-id was returned in the response headers."
         );
       }
+
+      if (categoryId) {
+        try {
+          await mapiPost<Record<string, unknown>>(
+            `/pim/catalogs/nodes/${categoryId}/products`,
+            { productId: resourceId },
+            creds
+          );
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Product "${name}" created and assigned to catalog category ${categoryId}. ID: ${resourceId}`,
+              },
+            ],
+          };
+        } catch (err) {
+          // Product was created — report success and note the assignment failure.
+          const message = err instanceof Error ? err.message : String(err);
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text:
+                  `Product "${name}" created successfully. ID: ${resourceId}\n\n` +
+                  `Note: category assignment to ${categoryId} failed. You can assign it manually in Bluestone PIM. Error: ${message}`,
+              },
+            ],
+          };
+        }
+      }
+
       return {
         content: [
           {
