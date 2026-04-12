@@ -104,6 +104,14 @@ The cause is ambiguity: "show the image" is a strong web search prior. The model
 
 **Why the `list_published_products_in_category` guard is the strongest:** By the time the user asks for an image, the model has already received that tool's result with `imageUrl` in hand. An instruction in that description fires at exactly the right moment in context, not at startup when the model first reads all descriptions.
 
+### Image renders in tool result panel, not inline
+
+In Claude Desktop, `image` content blocks returned by a tool appear inside the tool result panel, not injected into Claude's reply text. The tool result panel is collapsed by default under the "Get product image" step. Users have to expand it to see the image.
+
+This is a Claude Desktop rendering decision, not something the server controls. The image content block is correct per the MCP spec; it is just not surfaced in the main chat thread.
+
+**Mitigation applied:** The `get_product_image` description instructs Claude to tell the user to expand the "Get product image" step after calling the tool. This is the only lever available server-side.
+
 ---
 
 ## Stateless bearer tokens (no session store)

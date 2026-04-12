@@ -254,13 +254,7 @@ You are now connected. Bluestone PIM moves to the top of your Connectors list an
 
 ### Try it
 
-Open a chat and ask:
-
-[prompt: Using Bluestone PIM, show me my catalogs]
-
-[prompt: List all products in the first catalog you found]
-
-[prompt: Create a new product called Summer Jacket]
+See the [Examples](#examples) section for prompts and what to expect.
 
 ---
 
@@ -311,13 +305,7 @@ You are now connected. The server shows a green dot and lists its available tool
 
 ### Try it
 
-Open a chat and ask:
-
-[prompt: Using Bluestone PIM, show me my catalogs]
-
-[prompt: List all products in the first catalog you found]
-
-[prompt: Create a new product called Summer Jacket]
+See the [Examples](#examples) section for prompts and what to expect.
 
 ---
 
@@ -366,13 +354,7 @@ You are now connected. ChatGPT shows a "Bluestone PIM is now connected" confirma
 
 ### Try it
 
-Open a chat and ask:
-
-[prompt: Using Bluestone PIM, show me my catalogs]
-
-[prompt: List all products in the first catalog you found]
-
-[prompt: Create a new product called Summer Jacket]
+See the [Examples](#examples) section for prompts and what to expect.
 
 ---
 
@@ -612,24 +594,66 @@ If you are thinking through the same problems (how to write tool descriptions th
         ]
       },
       {
-        chatTitle: 'Published: Clothes',
-        label: 'Check what is actually live in your store',
+        chatTitle: 'Published: Clothes (not found)',
+        label: 'When a catalog has not been published yet',
         turns: [
           { type: 'user', text: "Using Bluestone PIM, show me only what's published in Clothes, not drafts" },
           { type: 'tool', name: 'search_tools', display: 'Loading tools' },
           { type: 'tool', name: 'list_published_catalogs', display: 'List published catalogs' },
-          { type: 'reply', text: 'I don\'t see a "Clothes" catalog in the published catalogs. There are 8 published catalogs: Skincare, Intake - ERP, Products, Wasa, Barilla, Mulino Bianco, Pan di Stelle, and Output - Ecommerce.<br><br>It\'s possible that "Clothes" exists as a draft/unpublished catalog. Would you like me to check the unpublished catalogs to see if it\'s there but not yet published?' },
+          { type: 'reply', text: 'The Clothes catalog doesn\'t appear in the published catalogs. The 8 published catalogs are: Skincare, Intake - ERP, Products, Wasa, Barilla, Mulino Bianco, Pan di Stelle, and Output - Ecommerce.<br><br>It may exist in working state but hasn\'t been published yet. Want me to check?' },
           { type: 'user', text: 'Yes' },
+          { type: 'tool', name: 'list_catalogs', display: 'List catalogs' },
+          { type: 'reply', text: 'Clothes exists in working state with 4 products, all currently in Draft:<br><br>1. T-shirt - Green<br>2. T-shirt - Blue<br>3. T-shirt - Red<br>4. T-shirt - Yellow<br><br>None have been published yet. Would you like to see more detail on any of these, or do something else with this catalog?' },
+        ],
+        notes: [
+          '<strong>Catalog not found in published results.</strong> Clothes wasn\'t in <code>list_published_catalogs</code> at all. Claude didn\'t stop at "not found". It explained what was published, inferred Clothes might exist as a draft, and offered to check. That behavior comes from the tool description: it tells the model what to do when a catalog is missing from published results.',
+        ]
+      },
+      {
+        chatTitle: 'Published: Clothes',
+        label: 'Check what is live and compare against draft',
+        turns: [
+          { type: 'user', text: "Using Bluestone PIM, show me only what's published in Clothes, not drafts" },
+          { type: 'tool', name: 'search_tools', display: 'Loading tools' },
           { type: 'tool', name: 'list_published_catalogs', display: 'List published catalogs' },
           { type: 'tool', name: 'list_published_products_in_category', display: 'List published products in category' },
-          { type: 'reply', text: 'Only one product is published in the Clothes catalog:<br><br><strong>T-shirt - Green</strong> — Single<br><br>Everything else in Clothes is still in draft/working state and hasn\'t been published yet. Would you like to do anything with this product, or publish any of the drafts?' },
+          { type: 'reply', text: 'There\'s just <strong>1 published product</strong> in the Clothes catalog:<br><br>' +
+            '<table style="width:100%;border-collapse:collapse;font-size:12.5px;margin:8px 0;">' +
+            '<tr style="border-bottom:1px solid rgba(255,255,255,0.15);"><th style="padding:5px 12px 5px 0;text-align:left;color:#aaa;font-weight:600;">Name</th><th style="padding:5px 0;text-align:left;color:#aaa;font-weight:600;">Type</th></tr>' +
+            '<tr><td style="padding:6px 12px 6px 0;">T-shirt - Green</td><td style="padding:6px 0;color:#888;">Single product</td></tr>' +
+            '</table>' +
+            'Everything else in Clothes is either a draft or not yet published. Want me to compare against the draft state to see what\'s pending?' },
+          { type: 'user', text: 'Compare against draft state' },
+          { type: 'tool', name: 'list_products_in_category', display: 'List products in category' },
+          { type: 'reply', text: 'Here\'s the comparison:<br><br>' +
+            '<table style="width:100%;border-collapse:collapse;font-size:12px;margin:8px 0;">' +
+            '<tr style="border-bottom:1px solid rgba(255,255,255,0.15);"><th style="padding:5px 10px 5px 0;text-align:left;color:#aaa;font-weight:600;">Product</th><th style="padding:5px 10px;text-align:left;color:#aaa;font-weight:600;">Published</th><th style="padding:5px 0;text-align:left;color:#aaa;font-weight:600;">Draft</th></tr>' +
+            '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:6px 10px 6px 0;">T-shirt - Green</td><td style="padding:6px 10px;">&#9989; Published</td><td style="padding:6px 0;">&#9888;&#65039; Name changed to <strong>"T-shirt - Green and Great!"</strong></td></tr>' +
+            '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:6px 10px 6px 0;">T-shirt - Blue</td><td style="padding:6px 10px;">&#10060; Not published</td><td style="padding:6px 0;color:#888;">Draft only</td></tr>' +
+            '<tr style="border-bottom:1px solid rgba(255,255,255,0.06);"><td style="padding:6px 10px 6px 0;">T-shirt - Red</td><td style="padding:6px 10px;">&#10060; Not published</td><td style="padding:6px 0;color:#888;">Draft only</td></tr>' +
+            '<tr><td style="padding:6px 10px 6px 0;">T-shirt - Yellow</td><td style="padding:6px 10px;">&#10060; Not published</td><td style="padding:6px 0;color:#888;">Draft only</td></tr>' +
+            '</table>' +
+            'A couple of things to note:<br><ul style="margin:8px 0;padding-left:18px;">' +
+            '<li style="margin-bottom:4px;"><strong>3 products are unpublished drafts.</strong> Blue, Red, and Yellow haven\'t been pushed live yet.</li>' +
+            '<li><strong>The Green T-shirt has a pending name change.</strong> It\'s live as "T-shirt - Green" but the draft has it renamed to "T-shirt - Green and Great!".</li>' +
+            '</ul>' },
+          { type: 'user', text: 'Show the image for green t-shirt' },
+          { type: 'tool', name: 'get_product_image', display: 'Get product image' },
+          { type: 'reply', text: 'The published product already returned an image URL, so I have everything I need!<br><br>' +
+            '<div style="background:#2a2a2a;border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:14px 16px;font-size:12.5px;max-width:280px;">' +
+            '<div style="color:#888;font-size:11px;margin-bottom:6px;">Clothes</div>' +
+            '<div style="font-weight:600;margin-bottom:8px;">T-shirt - Green</div>' +
+            '<div style="display:flex;gap:6px;margin-bottom:10px;"><span style="background:#166534;color:#86efac;font-size:11px;padding:2px 7px;border-radius:4px;">Published</span><span style="color:#888;font-size:11px;padding:2px 0;">SINGLE</span></div>' +
+            '<div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:8px;"><div style="color:#888;font-size:11px;margin-bottom:3px;">Draft name</div><div style="font-size:12.5px;">T-shirt - Green and Great!</div></div>' +
+            '</div><br>There it is. Also showing the pending draft name change underneath for context.' },
         ],
         missing: [
           '<strong>Publishing from chat:</strong> Claude can tell you what is and isn\'t published, and even offer to publish, but there is no tool yet to actually trigger a publish. The user has to go into Bluestone PIM to do it.',
         ],
         notes: [
-          '<strong>Catalog not found in published results.</strong> On the first attempt, the Clothes catalog wasn\'t published yet, so it didn\'t appear in <code>list_published_catalogs</code> at all. Claude didn\'t stop and say "not found". It explained what was published, inferred that Clothes might exist as a draft, and offered to check. That is exactly the right behavior, and it comes from the tool description telling the model what to do when a catalog is missing from published results.',
-          '<strong>Claude offered to publish the drafts.</strong> After showing the one published product, Claude proactively asked whether the user wanted to publish the remaining drafts. There is no publish tool yet, so if the user had said yes, Claude would have had to explain it can\'t do it. A future tool could close that gap.',
+          '<strong>The image URL was already in the product list.</strong> When the user asked for the image, Claude didn\'t need to fetch the product again. The <code>imageUrl</code> came back in the original <code>list_published_products_in_category</code> response, so <code>get_product_image</code> could fetch and display it directly.',
+          '<strong>The draft name change surfaced without being asked.</strong> Claude cross-referenced the published name against the working state data from the comparison turn and included it in the image response for context.',
+          '<strong>Where the image appears in Claude Desktop.</strong> The image renders inside the tool result panel, not inline in Claude\'s reply. Claude Desktop collapses tool results by default. Claude will tell you to expand the "Get product image" step to see it. This is a Claude Desktop rendering behavior, not something the server controls.',
         ]
       },
       {
