@@ -42,6 +42,22 @@ MAPI and Search endpoints accept a `context` request header that controls which 
 
 ---
 
+## Response shaping
+
+Every tool maps the raw Bluestone API response to a smaller, purpose-built object before handing it to the model. Only the fields the model actually needs to complete the task are included.
+
+**Why:** Raw API responses are wide. The PAPI product detail response contains media arrays, attribute definitions, relation lists, bundle lists, variant arrays, category arrays, publish info references, and more. Passing all of this to the model on every list call would flood the context window, increase cost, and make it harder for the model to focus on what matters. Response shaping keeps the payload lean and makes the model's output more predictable.
+
+The pattern also acts as an abstraction layer: the tool decides what to expose, not the API. If the API changes a field name or nesting structure, only the tool changes — the model's view of the data stays stable.
+
+**Image URL decision:** Product media is a clear case of a response shaping trade-off.
+
+- `list_published_products_in_category` includes `imageUrl` (the PAPI `previewUri` for the "Main" media asset) in each product object. This is cheap: the URL is already present in the list response, no extra API call needed. The model can mention or link the URL to the user.
+- The URL is not fetched and base64-encoded inline. Doing so for every product in a list would add one HTTP fetch per product, increase response latency and payload size significantly, and expand the context window with binary data.
+- For inline image rendering (where the image actually appears in chat), a separate `get_product_image` tool is provided. The model calls it explicitly when the user wants to see a specific product image. One fetch, on demand, for the product the user asked about.
+
+---
+
 ## Plain-text summary line before JSON
 
 All read tool responses begin with a human-readable summary ("Found 12 products in Electronics.") before the JSON payload.

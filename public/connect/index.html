@@ -466,6 +466,7 @@ A few concrete decisions that followed from those principles:
 - **The beta notice is delivered via server instructions**, sent during the MCP handshake before any tools are called. This is the correct channel for server-level context, not a tool the model must remember to call first.
 - **Working state by default, published on request.** Bluestone PIM has two data layers: working state (what your team is enriching right now, including unpublished drafts) and published (what has been synced and is live). The default read tools return working state from the management API, because that is what enrichment teams actually need to work with. Separate tools are available when you specifically ask for published data.
 - **Language switching without server state.** The server exposes a context parameter on read tools corresponding to Bluestone's language and market settings. When you ask for data in a specific language, the AI looks up the right context ID and passes it on subsequent calls. No session is needed on the server side. The model tracks the active language for the conversation naturally.
+- **Response shaping: only send the model what it needs.** Raw Bluestone API responses are wide. A product detail response contains media arrays, attribute definitions, relation lists, variant arrays, publish references, and more. Passing all of that to the model on every list call floods the context window, increases cost, and makes the model's output less predictable. Each tool maps the raw response to a smaller, purpose-built object before the model sees it. Only the fields required for the task are included. This also acts as an abstraction layer: if the API changes a field name or nesting structure, only the tool changes, not the model's view of the data. Product images are a clear example of the trade-off: the list tool includes the image URL in each product row (it is already in the response, no extra cost), but does not fetch and encode the image. Fetching and base64-encoding one image per product in a list of fifty would add fifty HTTP requests and balloon the context window with binary data. Instead, a separate `get_product_image` tool fetches a single image on demand when you ask to see it.
 
 If you are building on top of this or forking it, the [patterns and design docs](https://github.com/leafleaf90/bluestone-pim-unofficial-mcp/tree/main/docs) in the repo go into more detail.
 
@@ -613,9 +614,20 @@ If you are thinking through the same problems (how to write tool descriptions th
         label: 'Check what is actually live in your store',
         turns: [
           { type: 'user', text: "Using Bluestone PIM, show me only what's published in Clothes, not drafts" },
+          { type: 'tool', name: 'search_tools', display: 'Loading tools' },
+          { type: 'tool', name: 'list_published_catalogs', display: 'List published catalogs' },
+          { type: 'reply', text: 'I don\'t see a "Clothes" catalog in the published catalogs. There are 8 published catalogs: Skincare, Intake - ERP, Products, Wasa, Barilla, Mulino Bianco, Pan di Stelle, and Output - Ecommerce.<br><br>It\'s possible that "Clothes" exists as a draft/unpublished catalog. Would you like me to check the unpublished catalogs to see if it\'s there but not yet published?' },
+          { type: 'user', text: 'Yes' },
           { type: 'tool', name: 'list_published_catalogs', display: 'List published catalogs' },
           { type: 'tool', name: 'list_published_products_in_category', display: 'List published products in category' },
-          { type: 'reply', text: 'Using published data only (live store, no unpublished changes). The <strong>Clothes</strong> catalog has no published products yet &mdash; T-shirt - Green is still in Draft state. To see working state including drafts, ask without the &ldquo;published&rdquo; qualifier.' },
+          { type: 'reply', text: 'Only one product is published in the Clothes catalog:<br><br><strong>T-shirt - Green</strong> — Single<br><br>Everything else in Clothes is still in draft/working state and hasn\'t been published yet. Would you like to do anything with this product, or publish any of the drafts?' },
+        ],
+        missing: [
+          '<strong>Publishing from chat:</strong> Claude can tell you what is and isn\'t published, and even offer to publish, but there is no tool yet to actually trigger a publish. The user has to go into Bluestone PIM to do it.',
+        ],
+        notes: [
+          '<strong>Catalog not found in published results.</strong> On the first attempt, the Clothes catalog wasn\'t published yet, so it didn\'t appear in <code>list_published_catalogs</code> at all. Claude didn\'t stop and say "not found". It explained what was published, inferred that Clothes might exist as a draft, and offered to check. That is exactly the right behavior, and it comes from the tool description telling the model what to do when a catalog is missing from published results.',
+          '<strong>Claude offered to publish the drafts.</strong> After showing the one published product, Claude proactively asked whether the user wanted to publish the remaining drafts. There is no publish tool yet, so if the user had said yes, Claude would have had to explain it can\'t do it. A future tool could close that gap.',
         ]
       },
       {

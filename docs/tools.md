@@ -177,6 +177,30 @@ PAPI pagination uses 0-indexed `pageNo`; the tool subtracts 1 from the 1-indexed
 
 ---
 
+## `get_product_image`
+
+**Purpose:** Fetch a product image from Bluestone's media CDN and return it as an inline image content block so it renders directly in chat.
+
+**Input:**
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `imageUrl` | string | Yes | The `imageUrl` field from a product in `list_published_products_in_category` |
+| `productName` | string | No | Product name used as alt text |
+
+**What Claude does:**
+- Calls this only when the user explicitly asks to see a product image, not automatically for every product in a list
+- Fetches the preview URL (already sized to 400px wide, JPEG format via the `?f=jpg&w=400` query params Bluestone appends)
+- Returns the image as base64 so it renders inline in the client
+
+**Design note:** See `docs/mcp-design.md` (Response shaping) for why image URLs are included in list responses but images are not fetched there — and why this is a separate on-demand tool rather than part of the list call.
+
+**Example prompts:**
+- "Show me what T-shirt - Green looks like"
+- "Can I see the product image?"
+
+---
+
 ## `create_product`
 
 **Purpose:** Create a new product in Bluestone PIM. Optionally assigns it to a catalog category after creation.

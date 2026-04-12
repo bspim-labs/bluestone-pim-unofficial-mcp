@@ -25,11 +25,18 @@ interface PapiCategoriesResponse {
   results: PapiCategory[];
 }
 
+interface PapiProductMedia {
+  previewUri: string;
+  downloadUri: string;
+  labels: string[];
+}
+
 interface PapiProduct {
   id: string;
   type: "GROUP" | "VARIANT" | "SINGLE";
   name: string;
   number: string;
+  media?: PapiProductMedia[];
 }
 
 interface PapiProductsResponse {
@@ -317,7 +324,8 @@ export function createMcpServer(creds: Credentials): McpServer {
         "- List all catalogs and their full category tree, working state (list_catalogs)\n" +
         "- List products in a catalog including all sub-categories, working state (list_products_in_category)\n" +
         "- List published catalogs only (list_published_catalogs)\n" +
-        "- List published products in a category (list_published_products_in_category)\n" +
+        "- List published products in a category, includes image URL per product (list_published_products_in_category)\n" +
+        "- Fetch and display a product image inline (get_product_image)\n" +
         "- Create a new product by name, optionally assigned to a catalog category (create_product)\n\n" +
         "What it cannot do yet:\n" +
         "- Fetch full product detail or attributes\n" +
@@ -632,7 +640,9 @@ export function createMcpServer(creds: Credentials): McpServer {
         "Returns only data that has been synced/published — does not include unpublished changes. " +
         "Use list_products_in_category instead when the user is working on enrichment or wants working state. " +
         "Call list_published_catalogs first to get valid category IDs.\n\n" +
-        "Product types in the response: GROUP (parent with variants), VARIANT (child of a GROUP), SINGLE (standalone).",
+        "Product types in the response: GROUP (parent with variants), VARIANT (child of a GROUP), SINGLE (standalone). " +
+        "Each product includes an imageUrl (preview) when a media asset is present — show it to the user when displaying product details. " +
+        "If the requested catalog is not found in the published results, call list_catalogs to check whether it exists in working state, and inform the user it has not been published yet.",
       inputSchema: {
         categoryId: z
           .string()
@@ -673,12 +683,17 @@ export function createMcpServer(creds: Credentials): McpServer {
         creds
       );
 
-      const products = data.results.map((p) => ({
-        id: p.id,
-        name: p.name,
-        number: p.number,
-        type: p.type,
-      }));
+      const products = data.results.map((p) => {
+        const mainMedia =
+          p.media?.find((m) => m.labels.includes("Main")) ?? p.media?.[0];
+        return {
+          id: p.id,
+          name: p.name,
+          number: p.number,
+          type: p.type,
+          ...(mainMedia ? { imageUrl: mainMedia.previewUri } : {}),
+        };
+      });
 
       const totalPages = Math.ceil(data.totalCount / effectiveLimit);
       const hasMore = effectivePage < totalPages;
@@ -707,6 +722,65 @@ export function createMcpServer(creds: Credentials): McpServer {
                 null,
                 2
               ),
+          },
+        ],
+      };
+    }
+  );
+
+  // Tool: get_product_image
+  server.registerTool(
+    "get_product_image",
+    {
+      description:
+        "Fetch and display a product image inline in chat. " +
+        "Use the imageUrl returned by list_published_products_in_category. " +
+        "Call this when the user asks to see a product image or wants a visual preview. " +
+        "Do not call this automatically for every product in a list — only when the user explicitly asks to see an image.",
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
+      inputSchema: {
+        imageUrl: z
+          .string()
+          .url()
+          .describe(
+            "The preview image URL from list_published_products_in_category (the imageUrl field on a product)."
+          ),
+        productName: z
+          .string()
+          .optional()
+          .describe("Product name used as alt text. Pass it when available."),
+      },
+    },
+    async ({ imageUrl, productName }) => {
+      let res: Response;
+      try {
+        res = await fetch(imageUrl);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(`Failed to fetch image: ${message}`);
+      }
+      if (!res.ok) {
+        throw new Error(`Image fetch failed (${res.status}). The URL may have expired or be unavailable.`);
+      }
+      const buffer = await res.arrayBuffer();
+      const base64 = Buffer.from(buffer).toString("base64");
+      const mimeType = res.headers.get("content-type")?.split(";")[0] ?? "image/jpeg";
+      const label = productName ? `Image: ${productName}` : "Product image";
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: label,
+          },
+          {
+            type: "image" as const,
+            data: base64,
+            mimeType,
           },
         ],
       };

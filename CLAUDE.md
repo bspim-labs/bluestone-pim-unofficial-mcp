@@ -30,7 +30,8 @@ All MCP tools are registered inside a single `createMcpServer(creds: Credentials
 - `list_catalogs` — calls MAPI `/pim/catalogs` via `mapiGet()`. Returns catalog IDs used directly as nodeId in the next tool.
 - `list_products_in_category` — three-step recursive listing. Steps 1+2 run in parallel: `POST /search/products/search?archiveState=ACTIVE` with `categoryFilters: [{categoryId, type: "IN_ANY_CHILD"}]` returns `{ data: [{id: string}] }` (objects, not strings — no total field); `POST /search/products/count` with the same filter body returns `{ count: int }` for the accurate total. Step 3: `POST /pim/products/list/views/by-ids?archiveState=ACTIVE` with `views: [{type: "METADATA"}]` resolves IDs to product data. Name is context-keyed (`metadata.name.value[context]`), not a plain string. Also returns `type` and `state` from metadata. Note: the UI uses `POST /pim/products/list/by-ids` (simpler flat response) but that endpoint is not in the official PIM spec — we use `list/views/by-ids` instead.
 - `list_published_catalogs` — calls PAPI `/categories` via `papiGet()` (published/live data only)
-- `list_published_products_in_category` — calls PAPI `/categories/{id}/products` via `papiGet()` (published/live data only)
+- `list_published_products_in_category` — calls PAPI `/categories/{id}/products` via `papiGet()` (published/live data only). Includes `imageUrl` (the `previewUri` for the "Main" media asset) on each product when present.
+- `get_product_image` — fetches a product image from Bluestone's CDN using the `imageUrl` from `list_published_products_in_category` and returns it as a base64 `image` content block for inline rendering in chat. Call only when the user explicitly asks to see an image, not automatically for every product in a list.
 - `create_product` — calls MAPI `/pim/products` via `mapiPost()`
 
 Version is defined in `src/version.ts` and imported by both `src/tools.ts` and `api/mcp.ts`. Update it there when bumping.

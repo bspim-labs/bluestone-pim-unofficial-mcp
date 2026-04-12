@@ -56,7 +56,7 @@ Three types of things an MCP server can expose:
 | **Resources** | File-like data Claude can read | No |
 | **Prompts** | Pre-written prompt templates | No |
 
-This server exposes six tools. See [tools.md](tools.md) for details.
+This server exposes seven tools. See [tools.md](tools.md) for details.
 
 ---
 
