@@ -2,5 +2,6 @@ node_modules/
 build/
 .env
 .vercel
+.claude/
 TODO.md
 .DS_Store

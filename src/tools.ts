@@ -122,12 +122,17 @@ interface MapiContextsResponse {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const API_BASE = "https://api.test.bluestonepim.com";
+const IS_PRODUCTION = process.env.ENVIRONMENT === "production";
+const API_BASE = IS_PRODUCTION
+  ? "https://api.bluestonepim.com"
+  : "https://api.test.bluestonepim.com";
 const PAPI_BASE = `${API_BASE}/v1`;
 const MAPI_PIM_BASE = `${API_BASE}/pim`;
 const MAPI_SEARCH_BASE = `${API_BASE}/search`;
 const MAPI_GLOBAL_SETTINGS_BASE = `${API_BASE}/global-settings`;
-const MAPI_TOKEN_URL = "https://idp.test.bluestonepim.com/op/token";
+const MAPI_TOKEN_URL = IS_PRODUCTION
+  ? "https://idp.bluestonepim.com/op/token"
+  : "https://idp.test.bluestonepim.com/op/token";
 
 const DEFAULT_PRODUCT_LIMIT = 50;
 const MAX_PRODUCT_LIMIT = 200;

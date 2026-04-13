@@ -87,7 +87,7 @@ Do not move this folder after completing setup, as Claude Desktop will look for 
 
 ---
 
-## Step 6: Add your API key
+## Step 6: Add your credentials
 
 1. Open the `bluestone-unofficial-mcp` folder in your IDE (VS Code or Cursor)
    - In VS Code: go to **File → Open Folder** and select `bluestone-unofficial-mcp`
@@ -96,13 +96,17 @@ Do not move this folder after completing setup, as Claude Desktop will look for 
 3. Open `.env`. It looks like this:
    ```
    PAPI_KEY=your-papi-key-here
+   MAPI_CLIENT_ID=your-mapi-client-id
+   MAPI_CLIENT_SECRET=your-mapi-client-secret
    ```
-4. Replace `your-papi-key-here` with the actual API key you were given
+4. Replace each placeholder with the actual credentials you were given
 5. Save the file (**Command + S**)
 
 The file should now look like:
 ```
-PAPI_KEY=theActualKeyYouWereGiven
+PAPI_KEY=theActualPapiKey
+MAPI_CLIENT_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+MAPI_CLIENT_SECRET=theActualClientSecret
 ```
 
 ---
@@ -165,7 +169,9 @@ Find the last `}` at the very end of the file. Before it, add a comma after the 
       "command": "node",
       "args": ["/Users/YOUR_USERNAME/Documents/bluestone-unofficial-mcp/build/index.js"],
       "env": {
-        "PAPI_KEY": "theActualKeyYouWereGiven"
+        "PAPI_KEY": "theActualPapiKey",
+        "MAPI_CLIENT_ID": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+        "MAPI_CLIENT_SECRET": "theActualClientSecret"
       }
     }
   }
@@ -174,7 +180,7 @@ Find the last `}` at the very end of the file. Before it, add a comma after the 
 
 **Important:** Replace `YOUR_USERNAME` with your actual Mac username. If you're not sure what it is, open Terminal and type `whoami`. It will print your username.
 
-Also replace `theActualKeyYouWereGiven` with your real API key (same one from Step 6).
+Replace the three credential placeholders with the same values you put in `.env` in Step 6.
 
 6. Save the file (**Command + S**)
 

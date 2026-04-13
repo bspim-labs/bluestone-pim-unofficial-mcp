@@ -93,4 +93,4 @@ See the **Production hardening** table in `docs/how-it-works.md` for the full li
 | No redirect_uri allowlist | URIs are not validated against what was registered at `/register`. Full fix requires persisting registrations. |
 | Stateless registration | Any opaque `client_id` is accepted at `/authorize` — unregistered clients can reach the form. |
 | CSP disabled | Should be re-enabled with a nonce-based policy before production exposure. |
-| No rate limiting | `/register`, `/authorize`, and `/token` have no rate limiting. |
+| Rate limiting | `/register`, `/authorize`, and `/token` are rate-limited in-memory (20 req/min per IP). Not globally consistent across concurrent Vercel instances; replace with a Redis-backed store for strict global limits. |

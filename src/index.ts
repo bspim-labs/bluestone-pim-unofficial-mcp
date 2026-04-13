@@ -12,7 +12,7 @@ const { PAPI_KEY, MAPI_CLIENT_ID, MAPI_CLIENT_SECRET } = process.env;
 
 if (!PAPI_KEY || !MAPI_CLIENT_ID || !MAPI_CLIENT_SECRET) {
   console.error(
-    "Missing credentials in .env — required: PAPI_KEY, MAPI_CLIENT_ID, MAPI_CLIENT_SECRET"
+    "Missing credentials in .env. Required: PAPI_KEY, MAPI_CLIENT_ID, MAPI_CLIENT_SECRET"
   );
   process.exit(1);
 }

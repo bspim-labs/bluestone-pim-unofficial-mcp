@@ -147,7 +147,7 @@ Base URL: `https://api.test.bluestonepim.com/search`. Same Bearer token auth as 
 
 ## Confirmed MAPI response shapes
 
-From direct testing and UI network inspection against `api.test.bluestonepim.com`:
+From direct testing against `api.test.bluestonepim.com`:
 
 **`GET /pim/catalogs`**
 ```json
@@ -164,19 +164,19 @@ Returns the full nested tree rooted at the catalog node. Each node has `children
 ```
 Minimal shape: no attributes, no product type, no pagination metadata. Use `page`/`pageSize` query params to page.
 
-**`POST /search/products/search`** (confirmed via UI network inspection)
+**`POST /search/products/search`** (confirmed against test environment)
 ```json
 { "data": [{ "id": "69da487cd41d9dd3b63c0ed1" }] }
 ```
 No `total` field. IDs are wrapped in objects, not plain strings. Always pair with `POST /search/products/count`.
 
-**`POST /search/products/count`** (confirmed via UI network inspection)
+**`POST /search/products/count`** (confirmed against test environment)
 ```json
 { "count": 1 }
 ```
 Uses the same filter body as `/search/products/search`. No page/pageSize needed.
 
-**`POST /pim/products/list/views/by-ids` with `views: [{ type: "METADATA" }]`** (confirmed via UI network inspection)
+**`POST /pim/products/list/views/by-ids` with `views: [{ type: "METADATA" }]`** (confirmed against test environment)
 ```json
 {
   "data": [{
