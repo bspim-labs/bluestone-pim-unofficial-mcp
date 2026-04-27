@@ -2,7 +2,7 @@
 
 An open-source MCP server that connects AI assistants (Claude Desktop, Cursor, ChatGPT) to your Bluestone PIM organisation. Browse catalogs, explore products, and create new products directly in chat.
 
-> **Bluestone PIM Labs community project.** Not an official product. No SLA. Contributions and forks welcome.
+> **[Bluestone PIM Labs](https://labs.bluestonepim.com/) community project.** Not an official product. No SLA. Contributions and forks welcome.
 
 ## Quick start
 
@@ -42,13 +42,13 @@ For full setup instructions, see the [connect page](https://bluestone-mcp-unoffi
 
 If you implement Bluestone for clients, you can fork this repo and build your own MCP server tailored to your workflows. Add tools, extend the data model, deploy under your own Vercel instance.
 
-A Bluestone PIM Labs community project. Questions? Open an issue on GitHub or reach out on Slack.
+A [Bluestone PIM Labs](https://labs.bluestonepim.com/) community project. Questions? Open an issue on GitHub or reach out on Slack.
 
 Start with `src/tools.ts` (where tools are registered) and [docs/extending.md](docs/extending.md).
 
 ## For customers
 
-This is a Bluestone PIM Labs community project, not an official Bluestone product.
+This is a [Bluestone PIM Labs](https://labs.bluestonepim.com/) community project, not an official Bluestone product.
 
 It works against the documented Bluestone APIs using your own credentials. If you run the server locally or deploy your own Vercel instance, your credentials stay entirely within your own infrastructure and are never stored by this project. See [docs/how-it-works.md](docs/how-it-works.md) for the full security model.
 
@@ -56,7 +56,7 @@ The shared test deployment at `bluestone-mcp-unofficial.vercel.app` is fine for 
 
 ## Author
 
-Built by [Viktor Lövgren](https://www.linkedin.com/in/viktorlovgren/). A Bluestone PIM Labs community project.
+Built by [Viktor Lövgren](https://www.linkedin.com/in/viktorlovgren/). A [Bluestone PIM Labs](https://labs.bluestonepim.com/) community project.
 
 ## License
 
